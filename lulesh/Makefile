@@ -6,8 +6,8 @@
 # ENZYME_PATH ?= /home/wmoses/git/Enzyme/enzyme/build13D/Enzyme/ClangEnzyme-13.so
 # CLANG_PATH ?= /mnt/sabrent/wmoses/llvm13/buildall/bin
 
-ENZYME_PATH ?= /home/wmoses/git/Enzyme/enzyme/buildomp/Enzyme/ClangEnzyme-15.so
-CLANG_PATH ?= /mnt/sabrent/wmoses/omp-llvm/build/bin
+ENZYME_PATH ?= /home/wmoses/git/Enzyme/enzyme/build12/Enzyme/ClangEnzyme-12.so
+CLANG_PATH ?= /home/wmoses/llvms/llvm12/buildD/bin
 
 #ENZYME_PATH ?= /home/ubuntu/Enzyme/enzyme/build/Enzyme/ClangEnzyme-14.so
 #CLANG_PATH ?= /home/ubuntu/llvm-project/build/bin
@@ -32,7 +32,7 @@ SOURCES2.0 = \
 OBJECTS2.0 = $(SOURCES2.0:.cc=.o)
 
 #Default build suggestions with OpenMP for g++
-CXXFLAGS = -O3 -I. -Wall -I $(OPENMP_PATH) -I $(MPI_PATH) -fno-exceptions -mllvm -enzyme-loose-types -fplugin=$(ENZYME_PATH) -lmpi -mllvm -attributor-max-iterations=128 -mllvm -capture-tracking-max-uses-to-explore=256 -ffast-math -mllvm -memdep-block-scan-limit=70000 -mllvm -dse-memoryssa-walklimit=70000 -mllvm -enzyme-inline 
+CXXFLAGS = -I/usr/include/c++/11 -I/usr/include/x86_64-linux-gnu/c++/11 -L/usr/lib/gcc/x86_64-linux-gnu/11 -O3 -I. -Wall -I $(OPENMP_PATH) -I $(MPI_PATH) -fno-exceptions -mllvm -enzyme-loose-types -fplugin=$(ENZYME_PATH) -lmpi -mllvm -attributor-max-iterations=128 -mllvm -capture-tracking-max-uses-to-explore=256 -ffast-math -mllvm -memdep-block-scan-limit=70000 -mllvm -dse-memoryssa-walklimit=70000 -mllvm -enzyme-inline 
 # -mllvm -enzyme-print -Rpass=enzyme
 # enzyme-print-perf
 # CXXFLAGS += -mllvm -debug-only=openmp-opt -mllvm -openmp-opt-print-module
