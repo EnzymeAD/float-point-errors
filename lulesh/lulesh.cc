@@ -163,6 +163,16 @@ Additional BSD Notice
 #include "lulesh-comm.cc"
 /* Work Routines */
 
+#ifndef FORWARD
+#include "fp-logger.hpp"
+
+void thisIsNeverCalledAndJustForTheLinker() {
+  enzymeLogError("", 0.0);
+  enzymeLogGrad("", 0.0);
+  enzymeLogValue("", 0.0, 2, nullptr);
+}
+#endif
+
 static inline
 void TimeIncrement(Domain& domain)
 {
@@ -2691,11 +2701,14 @@ void LagrangeLeapFrog(Domain& __restrict__ domain)
 }
 
 int enzyme_dup;
-void __enzyme_error_estimate(void*, int, void*, void*);
+void __enzyme_autodiff(void*, int, void*, void*);
 /******************************************/
 
 int main(int argc, char *argv[])
 {
+#ifndef FORWARD
+   initializeLogger();
+#endif
    Domain *locDom ;
    Domain *grad_locDom ;
    int numRanks ;
@@ -2798,7 +2811,7 @@ int main(int argc, char *argv[])
 #ifdef FORWARD
       LagrangeLeapFrog(*locDom) ;
 #else
-      __enzyme_error_estimate((void*)LagrangeLeapFrog, enzyme_dup, locDom, grad_locDom);
+      __enzyme_autodiff((void*)LagrangeLeapFrog, enzyme_dup, locDom, grad_locDom);
 #endif
 
       if ((opts.showProg != 0) && (opts.quiet == 0) && (myRank == 0)) {
@@ -2842,5 +2855,9 @@ int main(int argc, char *argv[])
    MPI_Finalize() ;
 #endif
 
+#ifndef FORWARD
+   printLogger();
+   destroyLogger();
+#endif
    return 0 ;
 }
