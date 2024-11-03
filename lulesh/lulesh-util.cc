@@ -44,6 +44,7 @@ static void PrintCommandLineOptions(char *execname, int myRank)
       printf(" -p              : Print out progress\n");
       printf(" -v              : Output viz file (requires compiling with -DVIZ_MESH\n");
       printf(" -h              : This message\n");
+      printf(" -e              : Print energy array (for FPOpt experiment)\n");
       printf("\n\n");
    }
 }
@@ -159,6 +160,11 @@ void ParseCommandLineOptions(int argc, char *argv[],
 #else
             exit(0);
 #endif
+         }
+         /* -e */
+         else if (strcmp(argv[i], "-e") == 0) {
+            opts->showE = 1;
+            i++;
          }
          else {
             char msg[80];

@@ -2708,9 +2708,9 @@ int main(int argc, char *argv[])
 {
 #ifndef FORWARD
    initializeLogger();
+   Domain *grad_locDom ;
 #endif
    Domain *locDom ;
-   Domain *grad_locDom ;
    int numRanks ;
    int myRank ;
    struct cmdLineOpts opts;
@@ -2776,8 +2776,10 @@ int main(int argc, char *argv[])
    locDom = new Domain(numRanks, col, row, plane, opts.nx,
                        side, opts.numReg, opts.balance, opts.cost) ;
 
+#ifndef FORWARD
    grad_locDom = new Domain(numRanks, col, row, plane, opts.nx,
                        side, opts.numReg, opts.balance, opts.cost) ;
+#endif
 
 #if USE_MPI   
    fieldData = &Domain::nodalMass ;
@@ -2820,6 +2822,14 @@ int main(int argc, char *argv[])
                    << "time = " << double(locDom->time()) << ", "
                    << "dt="     << double(locDom->deltatime()) << "\n";
          std::cout.unsetf(std::ios_base::floatfield);
+      }
+
+      if (opts.showE != 0) {
+        std::cout << "Energy (size " << locDom->m_e.size() << "): [";
+        for (const auto &e : locDom->m_e) {
+          std::cout << e << ", ";
+        }
+        std::cout << "]\n";
       }
    }
 

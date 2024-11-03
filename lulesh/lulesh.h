@@ -611,6 +611,7 @@ struct cmdLineOpts {
    Int_t viz; // -v 
    Int_t cost; // -c
    Int_t balance; // -b
+   Int_t showE; // -e
 };
 
 
