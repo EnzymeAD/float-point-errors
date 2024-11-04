@@ -16,7 +16,7 @@ CXXFLAGS = -I$(HOME)/include -L$(HOME)/lib \
            -I/usr/include/c++/13 \
            -I/usr/include/x86_64-linux-gnu/c++/13 \
            -L/usr/lib/gcc/x86_64-linux-gnu/13 \
-           -O0 -I. -Wall \
+           -O3 -I. -Wall \
            -fno-exceptions \
            -mllvm -enzyme-loose-types \
            -fplugin=$(ENZYME_PATH) \
@@ -41,7 +41,11 @@ eig-fpopt.exe: eig-fpopt.o
 	@echo "Building optimized executable: $@"
 	time $(CXX) eig-fpopt.o $(CXXFLAGS) -lm -o $@
 
-eig-fpopt.o: eig.cpp
+eig.txt: eig-logged.exe
+	@echo "Running logged executable: $<"
+	./$< > $@
+
+eig-fpopt.o: eig.cpp eig.txt
 	@echo "Compiling optimized object: $@"
 	time $(CXX) -c $(SOURCES) $(CXXFLAGS) \
 		-mllvm -enzyme-enable-fpopt \

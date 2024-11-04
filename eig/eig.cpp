@@ -4,11 +4,11 @@
 #ifdef LOGGED
 #include "fp-logger.hpp"
 
-// void thisIsNeverCalledAndJustForTheLinker() {
-//   enzymeLogError("", 0.0);
-//   enzymeLogGrad("", 0.0);
-//   enzymeLogValue("", 0.0, 2, nullptr);
-// }
+void thisIsNeverCalledAndJustForTheLinker() {
+  enzymeLogError("", 0.0);
+  enzymeLogGrad("", 0.0);
+  enzymeLogValue("", 0.0, 2, nullptr);
+}
 
 int enzyme_dup;
 int enzyme_dupnoneed;
@@ -122,7 +122,7 @@ struct Eigensystem {
 //
 // based on "A robust algorithm for finding the eigenvalues and
 // eigenvectors of 3x3 symmetric matrices", by Scherzinger & Dohrmann
-inline Eigensystem eig(const mat3 &A) {
+void eig(const mat3 &A, Eigensystem &res) {
 
   vec3 eigenvalues = {0.0, 0.0, 0.0};
   mat3 eigenvectors = {{{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
@@ -226,7 +226,8 @@ inline Eigensystem eig(const mat3 &A) {
   // shift them to get eigenvalues of A
   eigenvalues = eigenvalues + vec3{1, 1, 1} * trA_3;
 
-  return Eigensystem{eigenvalues, eigenvectors};
+  res.lambda = eigenvalues;
+  res.X = eigenvectors;
 }
 
 int main() {
@@ -235,14 +236,16 @@ int main() {
 #endif
 
   mat3 A = {{{1.14, -0.14, -0.11}, {-0.14, 1.04, -0.04}, {-0.11, -0.04, 1.02}}};
+  Eigensystem res;
 
 #ifdef LOGGED
-  auto [evalues, evectors] =
-      __enzyme_autodiff<Eigensystem>((void *)eig, enzyme_const, &A);
+  Eigensystem res_grad;
+  __enzyme_autodiff<void>((void *)eig, enzyme_const, &A, enzyme_dup, &res, &res_grad);
 #else
-  auto [evalues, evectors] = eig(A);
+  eig(A, res);
 #endif
 
+  auto [evalues, evectors] = res;
   std::cout << "matrix: " << A << std::endl << std::endl;
   std::cout << "eigenvalues: " << evalues << std::endl;
   std::cout << "eigenvectors: " << evectors << std::endl;
