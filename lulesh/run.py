@@ -11,53 +11,46 @@ HOME = "/home/sbrantq"
 
 np.random.seed(42)
 
-def run_command(command, description, capture_output=False, output_file=None, verbose=True, env=None):
-    if verbose:
-        print(f"=== {description} ===")
-        print("Running:", " ".join(command))
+def run_command(command, description, log_file, env=None):
     try:
-        if capture_output and output_file:
-            with open(output_file, "w") as f:
-                result = subprocess.run(
-                    command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=True, env=env
-                )
-                f.write(result.stdout)
-                return result.stdout
-        elif capture_output:
-            result = subprocess.run(command, capture_output=True, text=True, check=True, env=env)
-            return result.stdout
-        else:
-            if verbose:
-                subprocess.check_call(command, env=env)
-            else:
-                subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+        with open(log_file, "w") as f:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                check=True,
+                env=env
+            )
+            f.write(result.stdout)
+            return result
     except subprocess.CalledProcessError as e:
-        if verbose:
-            print(f"Error during: {description}")
-            if capture_output and output_file:
-                print(f"Check the output file: {output_file} for details.")
-            else:
-                print(e)
+        print(f"Error during: {description}")
+        print(f"Check the log file: {log_file} for details.")
+        with open(log_file, "a") as f:
+            f.write(f"\nError: {e}\n")
         return None
 
 
 def compile_shared_objects(env):
-    """Compile shared object files once."""
     shared_sources = ["lulesh-viz.cc", "lulesh-util.cc", "lulesh-init.cc"]
-    cmd_compile_shared = [CXX, "-DOMP_MERGE=0", "-DUSE_MPI=0"] + CXXFLAGS + ["-c"] + shared_sources
-    run_command(
-        cmd_compile_shared,
-        "Compiling shared source files",
-        capture_output=False,
-        verbose=False,
-        env=env,
-    )
+    shared_objs = []
+    for src in shared_sources:
+        obj = src.replace('.cc', '.o')
+        shared_objs.append(obj)
+        cmd_compile_shared = [CXX, "-DOMP_MERGE=0", "-DUSE_MPI=0"] + CXXFLAGS + ["-c", src, "-o", obj]
+        log_file = os.path.join("logs", f"compile_shared_{src.replace('.cc', '')}.log")
+        run_command(
+            cmd_compile_shared,
+            f"Compiling shared source file {src}",
+            log_file=log_file,
+            env=env,
+        )
     print("Shared object files compiled successfully.")
+    return shared_objs
 
 
-def build_optimized_binary(budget, env, tmp_dir):
-    """Compile lulesh.cc with a specific FPOpt budget and link with shared objects."""
-    description = f"Building optimized LULESH binary with budget {budget}"
+def compile_binary(budget, env, tmp_dir):
     fpopt_flags = FPOPTFLAGS_BASE.copy()
     fpopt_flags += ["-mllvm", f"-fpopt-comp-cost-budget={budget}"]
 
@@ -74,44 +67,40 @@ def build_optimized_binary(budget, env, tmp_dir):
     compile_output = run_command(
         cmd_compile_fpopt,
         f"Compiling lulesh.cc with budget {budget}",
-        capture_output=True,
-        output_file=log_file_compile,
-        verbose=False,
+        log_file=log_file_compile,
         env=env,
     )
 
     if compile_output is None:
         print(f"Skipping budget {budget} due to compilation failure.")
-        return
+        return None
 
+    return obj_file
+
+
+def link_binary(budget, obj_file, shared_objs, env, tmp_dir):
+    """Link the compiled object file with shared objects to create the executable."""
     executable = os.path.join(tmp_dir, f"ser-single-forward-fpopt-{budget}.exe")
     cmd_link = (
         [CXX]
         + CXXFLAGS
-        + [
-            obj_file,
-            "lulesh-viz.o",
-            "lulesh-util.o",
-            "lulesh-init.o",
-            "-lm",
-            "-o",
-            executable,
-        ]
+        + [obj_file] + shared_objs
+        + ["-lm", "-o", executable]
     )
 
-    try:
-        run_command(
-            cmd_link,
-            f"Linking binary for budget {budget}",
-            capture_output=False,
-            verbose=False,
-            env=env,
-        )
-        return executable
-    except subprocess.CalledProcessError as e:
+    log_file_link = os.path.join("logs", f"link_budget_{budget}.log")
+    result = run_command(
+        cmd_link,
+        f"Linking binary for budget {budget}",
+        log_file=log_file_link,
+        env=env,
+    )
+
+    if result is None:
         print(f"Linking failed for budget {budget}.")
-        print(e)
-        return
+        return None
+
+    return executable
 
 
 def main():
@@ -137,8 +126,8 @@ def main():
         "-I.",
         "-Wall",
         "-fno-exceptions",
-        "-I" + os.path.join(env["HOME"], "include"),
-        "-L" + os.path.join(env["HOME"], "lib"),
+        "-I" + os.path.join(HOME, "include"),
+        "-L" + os.path.join(HOME, "lib"),
         "-I/usr/include/c++/13",
         "-I/usr/include/x86_64-linux-gnu/c++/13",
         "-L/usr/lib/gcc/x86_64-linux-gnu/13",
@@ -181,9 +170,9 @@ def main():
         "-fpopt-cost-model-path=cm.csv",
     ]
 
-    run_command(["make", "clean"], "Cleaning previous builds", verbose=False)
+    run_command(["make", "clean"], "Cleaning previous builds", log_file=os.path.join("logs", "make_clean.log"))
 
-    compile_shared_objects(env)
+    shared_objs = compile_shared_objects(env)
 
     NUM_TESTED_COSTS = 128
     budget_range = [-500000000000, -200000000000]
@@ -194,23 +183,48 @@ def main():
     budgets.sort()
     print("Testing the following budgets:", budgets)
 
+    # Phase 1: Compile all binaries in parallel
     max_workers = 64
+    compiled_objs = []
+    failed_budgets = []
+
+    print("=== Phase 1: Compiling Object Files ===")
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_budget = {executor.submit(build_optimized_binary, budget, env, "tmp"): budget for budget in budgets}
+        future_to_budget = {executor.submit(compile_binary, budget, env, "tmp"): budget for budget in budgets}
 
         with tqdm(total=NUM_TESTED_COSTS, desc="Compiling Binaries") as pbar:
             for future in as_completed(future_to_budget):
                 budget = future_to_budget[future]
                 try:
-                    result = future.result()
-                    if result:
-                        pass
+                    obj_file = future.result()
+                    if obj_file:
+                        compiled_objs.append((budget, obj_file))
+                    else:
+                        failed_budgets.append(budget)
                 except Exception as e:
-                    print(f"An error occurred for budget {budget}: {e}")
+                    print(f"An error occurred during compilation for budget {budget}: {e}")
+                    failed_budgets.append(budget)
                 finally:
                     pbar.update(1)
 
-    print("All binaries compiled and saved in 'tmp' folder.")
+    print(f"Compilation phase completed. {len(compiled_objs)} succeeded, {len(failed_budgets)} failed.")
+
+    # Phase 2: Link binaries sequentially
+    print("=== Phase 2: Linking Binaries ===")
+    with tqdm(total=len(compiled_objs), desc="Linking Binaries") as pbar:
+        for budget, obj_file in compiled_objs:
+            executable = link_binary(budget, obj_file, shared_objs, env, "tmp")
+            if executable:
+                print(f"Linked executable for budget {budget}: {executable}")
+            else:
+                print(f"Linking failed for budget {budget}.")
+            pbar.update(1)
+
+    print("All binaries compiled and linked. Executables are saved in the 'tmp' folder.")
+    if failed_budgets:
+        print("Some budgets failed during compilation or linking:")
+        for b in failed_budgets:
+            print(f"  - Budget {b}")
 
 
 if __name__ == "__main__":
