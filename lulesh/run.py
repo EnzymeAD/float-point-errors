@@ -5,10 +5,11 @@ import subprocess
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
-from tqdm import tqdm  
+from tqdm import tqdm
 
 HOME = "/home/sbrantq"
 
+np.random.seed(42)
 
 def run_command(command, description, capture_output=False, output_file=None, verbose=True, env=None):
     if verbose:
@@ -43,14 +44,12 @@ def run_command(command, description, capture_output=False, output_file=None, ve
 def compile_shared_objects(env):
     """Compile shared object files once."""
     shared_sources = ["lulesh-viz.cc", "lulesh-util.cc", "lulesh-init.cc"]
-    cmd_compile_shared = (
-        [CXX, "-DOMP_MERGE=0", "-DUSE_MPI=0"] + CXXFLAGS + ["-c"] + shared_sources
-    )
+    cmd_compile_shared = [CXX, "-DOMP_MERGE=0", "-DUSE_MPI=0"] + CXXFLAGS + ["-c"] + shared_sources
     run_command(
         cmd_compile_shared,
         "Compiling shared source files",
         capture_output=False,
-        verbose=False,  
+        verbose=False,
         env=env,
     )
     print("Shared object files compiled successfully.")
@@ -77,7 +76,7 @@ def build_optimized_binary(budget, env, tmp_dir):
         f"Compiling lulesh.cc with budget {budget}",
         capture_output=True,
         output_file=log_file_compile,
-        verbose=False,  
+        verbose=False,
         env=env,
     )
 
@@ -105,7 +104,7 @@ def build_optimized_binary(budget, env, tmp_dir):
             cmd_link,
             f"Linking binary for budget {budget}",
             capture_output=False,
-            verbose=False,  
+            verbose=False,
             env=env,
         )
         return executable
@@ -175,26 +174,29 @@ def main():
         "-mllvm",
         "-fpopt-early-prune",
         "-mllvm",
+        "-herbie-timeout=120",
+        "-mllvm",
+        "-herbie-disable-taylor",
+        "-mllvm",
         "-fpopt-cost-model-path=cm.csv",
     ]
 
-    run_command(["make", "clean"], "Cleaning previous builds", verbose=False)  
+    run_command(["make", "clean"], "Cleaning previous builds", verbose=False)
 
     compile_shared_objects(env)
 
     NUM_TESTED_COSTS = 128
-    budget_range = [-534547091630, -314733022699]
+    budget_range = [-500000000000, -200000000000]
     budget_lower = min(budget_range)
     budget_upper = max(budget_range)
 
-    budgets = list(map(int, np.linspace(budget_lower, budget_upper, NUM_TESTED_COSTS)))
+    budgets = np.random.uniform(budget_lower, budget_upper, NUM_TESTED_COSTS).astype(int).tolist()
+    budgets.sort()
+    print("Testing the following budgets:", budgets)
 
     max_workers = 64
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_budget = {
-            executor.submit(build_optimized_binary, budget, env, "tmp"): budget
-            for budget in budgets
-        }
+        future_to_budget = {executor.submit(build_optimized_binary, budget, env, "tmp"): budget for budget in budgets}
 
         with tqdm(total=NUM_TESTED_COSTS, desc="Compiling Binaries") as pbar:
             for future in as_completed(future_to_budget):
@@ -202,7 +204,7 @@ def main():
                 try:
                     result = future.result()
                     if result:
-                        pass  
+                        pass
                 except Exception as e:
                     print(f"An error occurred for budget {budget}: {e}")
                 finally:
