@@ -56,7 +56,8 @@ eig-fpopt.o: eig.cpp eig.txt
 		-mllvm -fpopt-num-samples=1024 \
 		-mllvm -fpopt-cost-dom-thres=0.0 \
 		-mllvm -fpopt-acc-dom-thres=0.0 \
-		-mllvm -fpopt-early-prune \
+		-mllvm -enzyme-print-fpopt \
+		-mllvm -herbie-timeout=500 \
 		-mllvm --fpopt-cost-model-path=cm.csv \
 		-o $@
 

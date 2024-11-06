@@ -1,5 +1,10 @@
+#include <chrono>
 #include <cmath>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <random>
 
 #ifdef LOGGED
 #include "fp-logger.hpp"
@@ -230,25 +235,118 @@ void eig(const mat3 &A, Eigensystem &res) {
   res.X = eigenvectors;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
 #ifdef LOGGED
   initializeLogger();
 #endif
 
-  mat3 A = {{{1.14, -0.14, -0.11}, {-0.14, 1.04, -0.04}, {-0.11, -0.04, 1.02}}};
-  Eigensystem res;
+  int N = 10000;
+  std::string output_path = "";
+  bool save_output = false;
 
+  // Parse command-line arguments
+  for (int i = 1; i < argc; ++i) {
+    if (strcmp(argv[i], "--output-path") == 0) {
+      if (i + 1 < argc) {
+        output_path = argv[++i];
+        save_output = true;
+      } else {
+        std::cerr << "Error: --output-path option requires a value"
+                  << std::endl;
+        return 1;
+      }
+    } else if (strcmp(argv[i], "--N") == 0) {
+      if (i + 1 < argc) {
+        N = std::stoi(argv[++i]);
+      } else {
+        std::cerr << "Error: --N option requires a value" << std::endl;
+        return 1;
+      }
+    }
+  }
+
+  std::ofstream outfile;
+  if (save_output) {
+    outfile.open(output_path);
+    if (!outfile) {
+      std::cerr << "Error: Could not open output file: " << output_path
+                << std::endl;
+      return 1;
+    }
+    outfile << std::setprecision(std::numeric_limits<double>::digits10 + 1)
+            << std::scientific;
+  }
+
+  std::mt19937 rd;
+  rd.seed(42);
+  std::uniform_real_distribution<double> dist(-0.1, 0.1);
+
+  // Timing
+  auto start_time = std::chrono::high_resolution_clock::now();
+
+  for (int iter = 0; iter < N; ++iter) {
+    mat3 S;
+    for (int i = 0; i < 3; ++i)
+      for (int j = 0; j < 3; ++j)
+        S[i][j] = dist(rd);
+
+    mat3 A;
+    for (int i = 0; i < 3; ++i)
+      for (int j = 0; j < 3; ++j) {
+        A[i][j] = S[i][j] + S[j][i];
+        if (i == j)
+          A[i][j] += 1.0;
+      }
+
+    Eigensystem res;
 #ifdef LOGGED
-  Eigensystem res_grad;
-  __enzyme_autodiff<void>((void *)eig, enzyme_const, &A, enzyme_dup, &res, &res_grad);
+    mat3 A_grad;
+    Eigensystem res_grad;
+    __enzyme_autodiff<void>((void *)eig, enzyme_dup, &A, &A_grad, enzyme_dup,
+                            &res, &res_grad);
 #else
-  eig(A, res);
+    eig(A, res);
 #endif
 
-  auto [evalues, evectors] = res;
-  std::cout << "matrix: " << A << std::endl << std::endl;
-  std::cout << "eigenvalues: " << evalues << std::endl;
-  std::cout << "eigenvectors: " << evectors << std::endl;
+    if (save_output) {
+      outfile << "### Iteration: " << iter << "\n\n";
+      // Write eigenvalues
+      outfile << "Eigenvalues:\n[";
+      for (int i = 0; i < 3; ++i) {
+        outfile << res.lambda[i];
+        if (i < 2)
+          outfile << ", ";
+      }
+      outfile << "]\n\n";
+
+      // Write eigenvectors
+      outfile << "Eigenvectors:\n";
+      for (int i = 0; i < 3; ++i) {
+        outfile << "[";
+        for (int j = 0; j < 3; ++j) {
+          outfile << res.X[i][j];
+          if (j < 2)
+            outfile << ", ";
+        }
+        outfile << "]\n";
+      }
+      outfile << "\n";
+    }
+  }
+
+  auto end_time = std::chrono::high_resolution_clock::now();
+
+  // Compute runtime
+  std::chrono::duration<double> elapsed = end_time - start_time;
+
+  // Print runtime to stdout
+  std::cout << "Total runtime: " << elapsed.count() << " seconds" << std::endl;
+
+  // Close output file if it was opened
+  if (save_output) {
+    outfile.close();
+    std::cout << "Results saved to: " << output_path << std::endl;
+  }
 
 #ifdef LOGGED
   printLogger();
