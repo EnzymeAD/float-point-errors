@@ -160,12 +160,12 @@ def main():
         "-fpopt-cost-dom-thres=0.0",
         "-mllvm",
         "-fpopt-acc-dom-thres=0.0",
-        "-mllvm",
-        "-fpopt-early-prune",
+        # "-mllvm",
+        # "-fpopt-early-prune",
         "-mllvm",
         "-herbie-timeout=120",
-        "-mllvm",
-        "-herbie-disable-taylor",
+        # "-mllvm",
+        # "-herbie-disable-taylor",
         "-mllvm",
         "-fpopt-cost-model-path=cm.csv",
     ]
@@ -175,7 +175,7 @@ def main():
     shared_objs = compile_shared_objects(env)
 
     NUM_TESTED_COSTS = 128
-    budget_range = [-500000000000, -200000000000]
+    budget_range = [-570000000000, -380000000000]
     budget_lower = min(budget_range)
     budget_upper = max(budget_range)
 

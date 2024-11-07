@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <iomanip>
+#include <limits>
 #if USE_MPI
 #include <mpi.h>
 #endif
@@ -224,13 +225,14 @@ void VerifyAndWriteFinalOutput(Real_t elapsed_time,
    std::cout << "        MaxRelDiff   = " << std::setw(12) << MaxRelDiff   << "\n";
 
    // Timing information
-   std::cout.unsetf(std::ios_base::floatfield);
-   std::cout << std::setprecision(2);
-   std::cout << "\nElapsed time         = " << std::setw(10) << elapsed_time << " (s)\n";
-   std::cout << std::setprecision(8);
-   std::cout << "Grind time (us/z/c)  = "  << std::setw(10) << grindTime1 << " (per dom)  ("
-             << std::setw(10) << elapsed_time << " overall)\n";
-   std::cout << "FOM                  = " << std::setw(10) << 1000.0/grindTime2 << " (z/s)\n\n";
+   // std::cout.unsetf(std::ios_base::floatfield);
+   std::cout << std::setprecision(std::numeric_limits<double>::digits10 + 1);
+   // std::cout << std::setprecision(2);
+   std::cout << "\nElapsed time         = " << std::setw(20) << elapsed_time << " (s)\n";
+   // std::cout << std::setprecision(8);
+   std::cout << "Grind time (us/z/c)  = "  << std::setw(20) << grindTime1 << " (per dom)  ("
+             << std::setw(20) << elapsed_time << " overall)\n";
+   std::cout << "FOM                  = " << std::setw(20) << 1000.0/grindTime2 << " (z/s)\n\n";
 
    return ;
 }

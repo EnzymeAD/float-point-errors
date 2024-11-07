@@ -144,6 +144,8 @@ Additional BSD Notice
 
 */
 
+#include <iomanip>
+#include <limits>
 #include <climits>
 #include <vector>
 #include <math.h>
@@ -2825,6 +2827,9 @@ int main(int argc, char *argv[])
       }
 
       if (opts.showE != 0) {
+        std::cout << std::scientific
+                  << std::setprecision(std::numeric_limits<double>::digits10 +
+                                       1);
         std::cout << "Energy (size " << locDom->m_e.size() << "): [";
         for (const auto &e : locDom->m_e) {
           std::cout << e << ", ";

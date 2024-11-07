@@ -151,9 +151,6 @@ def run_command(command, log_file):
 
 
 def compile_fpopt(budget):
-    """
-    Compiles example-fpopt.exe with a specific budget.
-    """
     fpopt_flags = FPOPTFLAGS_BASE.copy()
     fpopt_flags = [
         flag if flag != "--fpopt-comp-cost-budget={budget}" else f"--fpopt-comp-cost-budget={budget}"
@@ -173,7 +170,7 @@ def main():
     num_workers = NUM_PARALLEL
 
     print(
-        f"Starting compilation of example-fpopt.exe with {len(BUDGETS)} budgets using {num_workers} parallel workers."
+        f"Starting compilation of eig-fpopt.exe with {len(BUDGETS)} budgets using {num_workers} parallel workers."
     )
 
     compiled = []
