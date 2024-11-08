@@ -105,12 +105,14 @@ lulesh-fpopt.o:
 		-mllvm -fpopt-log-path=lulesh.txt \
 		-mllvm -fpopt-enable-solver \
 		-mllvm -fpopt-target-func-regex=LagrangeLeapFrog \
-		-mllvm --fpopt-enable-pt \
+		-mllvm -fpopt-enable-pt \
 		-mllvm -fpopt-comp-cost-budget=0 \
 		-mllvm -fpopt-num-samples=1000 \
 		-mllvm -fpopt-cost-dom-thres=0.0 \
         -mllvm -fpopt-acc-dom-thres=0.0 \
-		-mllvm --fpopt-cost-model-path=cm.csv -o $@
+        -mllvm -herbie-timeout=500 \
+        -mllvm -herbie-num-threads=32 \
+		-mllvm -fpopt-cost-model-path=cm.csv -o $@
 	# time $(CXX) -DOMP_MERGE=0 -DUSE_MPI=0 -DFORWARD=1 lulesh.cc $(CXXFLAGS) -mllvm -enzyme-enable-fpopt -mllvm -fpopt-log-path=lulesh.txt -mllvm -enzyme-print-herbie -mllvm -enzyme-print-fpopt -S -emit-llvm -o lulesh-fpopt.ll # Doesn't work
 	# time $(CXX) -DOMP_MERGE=0 -DUSE_MPI=0 -DFORWARD=1 lulesh.cc $(CXXFLAGS) -mllvm -enzyme-enable-fpopt -mllvm -fpopt-log-path=lulesh.txt -mllvm -enzyme-print-herbie -mllvm -enzyme-print-fpopt -mllvm -herbie-disable-taylor -mllvm -fpopt-enable-solver -mllvm -fpopt-solver-type=dp -S -emit-llvm -o lulesh-fpopt.ll  # Works
 	# time $(CXX) -DOMP_MERGE=0 -DUSE_MPI=0 -DFORWARD=1 lulesh.cc $(CXXFLAGS) -mllvm -enzyme-enable-fpopt -mllvm -fpopt-log-path=lulesh.txt -mllvm -enzyme-print-herbie -mllvm -enzyme-print-fpopt -mllvm -herbie-disable-taylor -mllvm -herbie-disable-branch-expr -mllvm -fpopt-enable-solver -mllvm -fpopt-solver-type=dp -S -emit-llvm -o lulesh-fpopt.ll  # Works
