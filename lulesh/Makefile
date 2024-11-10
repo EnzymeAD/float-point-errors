@@ -111,7 +111,9 @@ lulesh-fpopt.o:
 		-mllvm -fpopt-cost-dom-thres=0.0 \
         -mllvm -fpopt-acc-dom-thres=0.0 \
         -mllvm -herbie-timeout=1000 \
+        -mllvm -fpopt-early-prune \
         -mllvm -herbie-num-threads=24 \
+        -mllvm -fpopt-cache-path=cache \
 		-mllvm -fpopt-cost-model-path=cm.csv -o $@
 	# time $(CXX) -DOMP_MERGE=0 -DUSE_MPI=0 -DFORWARD=1 lulesh.cc $(CXXFLAGS) -mllvm -enzyme-enable-fpopt -mllvm -fpopt-log-path=lulesh.txt -mllvm -enzyme-print-herbie -mllvm -enzyme-print-fpopt -S -emit-llvm -o lulesh-fpopt.ll # Doesn't work
 	# time $(CXX) -DOMP_MERGE=0 -DUSE_MPI=0 -DFORWARD=1 lulesh.cc $(CXXFLAGS) -mllvm -enzyme-enable-fpopt -mllvm -fpopt-log-path=lulesh.txt -mllvm -enzyme-print-herbie -mllvm -enzyme-print-fpopt -mllvm -herbie-disable-taylor -mllvm -fpopt-enable-solver -mllvm -fpopt-solver-type=dp -S -emit-llvm -o lulesh-fpopt.ll  # Works

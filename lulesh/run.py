@@ -11,16 +11,12 @@ HOME = "/home/sbrantq"
 
 np.random.seed(42)
 
+
 def run_command(command, description, log_file, env=None):
     try:
         with open(log_file, "w") as f:
             result = subprocess.run(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                check=True,
-                env=env
+                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=True, env=env
             )
             f.write(result.stdout)
             return result
@@ -36,7 +32,7 @@ def compile_shared_objects(env):
     shared_sources = ["lulesh-viz.cc", "lulesh-util.cc", "lulesh-init.cc"]
     shared_objs = []
     for src in shared_sources:
-        obj = src.replace('.cc', '.o')
+        obj = src.replace(".cc", ".o")
         shared_objs.append(obj)
         cmd_compile_shared = [CXX, "-DOMP_MERGE=0", "-DUSE_MPI=0"] + CXXFLAGS + ["-c", src, "-o", obj]
         log_file = os.path.join("logs", f"compile_shared_{src.replace('.cc', '')}.log")
@@ -81,12 +77,7 @@ def compile_binary(budget, env, tmp_dir):
 def link_binary(budget, obj_file, shared_objs, env, tmp_dir):
     """Link the compiled object file with shared objects to create the executable."""
     executable = os.path.join(tmp_dir, f"ser-single-forward-fpopt-{budget}.exe")
-    cmd_link = (
-        [CXX]
-        + CXXFLAGS
-        + [obj_file] + shared_objs
-        + ["-lm", "-o", executable]
-    )
+    cmd_link = [CXX] + CXXFLAGS + [obj_file] + shared_objs + ["-lm", "-o", executable]
 
     log_file_link = os.path.join("logs", f"link_budget_{budget}.log")
     result = run_command(
@@ -155,17 +146,19 @@ def main():
         "-mllvm",
         "-fpopt-enable-pt",
         "-mllvm",
-        "-fpopt-num-samples=1000",
+        "-fpopt-num-samples=1024",
         "-mllvm",
         "-fpopt-cost-dom-thres=0.0",
         "-mllvm",
         "-fpopt-acc-dom-thres=0.0",
-        # "-mllvm",
-        # "-fpopt-early-prune",
         "-mllvm",
-        "-herbie-timeout=500",
+        "-fpopt-early-prune",
         "-mllvm",
-        "-herbie-num-threads=16",
+        "-herbie-timeout=1000",
+        "-mllvm",
+        "-herbie-num-threads=1",
+        "-mllvm",
+        "-fpopt-cache-path=cache",
         # "-mllvm",
         # "-herbie-disable-taylor",
         "-mllvm",
@@ -176,14 +169,13 @@ def main():
 
     shared_objs = compile_shared_objects(env)
 
-    NUM_TESTED_COSTS = 128
-    budget_range = [-570000000000, -380000000000]
+    NUM_TESTED_COSTS = 1024
+    budget_range = [-430000000000, 540000000000]
     budget_lower = min(budget_range)
     budget_upper = max(budget_range)
 
     budgets = np.random.uniform(budget_lower, budget_upper, NUM_TESTED_COSTS).astype(int).tolist()
-    budgets.sort()
-    print("Testing the following budgets:", budgets)
+    print("Testing the following budgets:", sorted(budgets))
 
     # Phase 1: Compile all binaries in parallel
     max_workers = 64
