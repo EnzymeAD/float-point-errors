@@ -149,7 +149,16 @@ def extract_energy(output_file, iteration):
     return np.nan
 
 
-def plot_results(budgets, runtimes, errors, original_error, original_runtime):
+def plot_results(
+    budgets,
+    runtimes,
+    errors,
+    original_error,
+    original_runtime,
+    prefix="optimized",
+    output_format="png",
+    plots_dir="plots",
+):
     rcParams["font.size"] = 20
     rcParams["axes.titlesize"] = 24
     rcParams["axes.labelsize"] = 20
@@ -166,12 +175,12 @@ def plot_results(budgets, runtimes, errors, original_error, original_runtime):
     runtimes = runtimes[valid_indices]
     errors = errors[valid_indices]
 
-    # Percentage!!
     max_error = 100
-
-    # Cap errors to max values
     adjusted_errors = np.copy(errors)
     adjusted_errors[np.isnan(adjusted_errors)] = max_error
+    adjusted_errors[adjusted_errors > max_error] = max_error
+
+    assert np.all(adjusted_errors >= 0), "Relative errors contain negative values."
 
     fig1, ax1 = plt.subplots(figsize=(10, 8))
 
@@ -190,8 +199,8 @@ def plot_results(budgets, runtimes, errors, original_error, original_runtime):
     )
     ax2.tick_params(axis="y", labelcolor=color_error)
     ax2.axhline(y=original_error, color="green", linestyle="--", label="Original Relative Error")
-
-    ax2.set_yscale("symlog", linthresh=1e-3)
+    ax2.set_yscale("symlog", linthresh=1e-14)
+    ax2.set_ylim(bottom=0)
 
     ax1.set_title("Computation Cost Budget vs Runtime and Relative Error")
     ax1.grid(True)
@@ -214,10 +223,73 @@ def plot_results(budgets, runtimes, errors, original_error, original_runtime):
 
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.25)
-    plot_filename1 = os.path.join("plots", "runtime_error_plot_lulesh.png")
+
+    os.makedirs(plots_dir, exist_ok=True)
+
+    plot_filename1 = os.path.join(plots_dir, "runtime_error_plot.png")
     plt.savefig(plot_filename1, bbox_inches="tight", dpi=300)
     plt.close(fig1)
-    print(f"Plot saved to {plot_filename1}")
+    print(f"First plot saved to {plot_filename1}")
+
+    fig2, ax3 = plt.subplots(figsize=(10, 8))
+
+    ax3.set_xlabel("Runtimes (seconds)")
+    ax3.set_ylabel("Relative Errors (%)")
+    ax3.set_title(f"Pareto Front of Optimized Programs ({prefix})")
+
+    scatter1 = ax3.scatter(runtimes, adjusted_errors, label="Optimized Programs", color="blue")
+
+    if original_runtime is not None and original_error is not None:
+        scatter2 = ax3.scatter(
+            original_runtime,
+            original_error,
+            marker="x",
+            color="red",
+            s=100,
+            label="Original Program",
+        )
+
+    points = np.array(list(zip(runtimes, adjusted_errors)))
+    sorted_indices = np.argsort(points[:, 0])
+    sorted_points = points[sorted_indices]
+
+    pareto_front = [sorted_points[0]]
+    for point in sorted_points[1:]:
+        if point[1] <= pareto_front[-1][1]:
+            pareto_front.append(point)
+
+    pareto_front = np.array(pareto_front)
+
+    (line_pareto,) = ax3.plot(
+        pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front"
+    )
+    ax3.set_yscale("log")
+
+    ax3.grid(True)
+
+    pareto_lines = [scatter1, line_pareto]
+    pareto_labels = [scatter1.get_label(), line_pareto.get_label()]
+    if original_runtime is not None and original_error is not None:
+        pareto_lines.append(scatter2)
+        pareto_labels.append(scatter2.get_label())
+
+    ax3.legend(
+        pareto_lines,
+        pareto_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=len(pareto_lines),
+        borderaxespad=0.0,
+        frameon=False,
+    )
+
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.25)
+
+    plot_filename2 = os.path.join(plots_dir, f"pareto_front_plot_{prefix}.{output_format}")
+    plt.savefig(plot_filename2, bbox_inches="tight", dpi=300)
+    plt.close(fig2)
+    print(f"Second plot saved to {plot_filename2}")
 
 
 def accuracy_task(executable, reference_output="lulesh_gold.txt"):
