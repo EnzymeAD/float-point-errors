@@ -240,7 +240,7 @@ int main(int argc, char *argv[]) {
   initializeLogger();
 #endif
 
-  int N = 10000;
+  int N = 1e5;
   std::string output_path = "";
   bool save_output = false;
 
@@ -279,7 +279,7 @@ int main(int argc, char *argv[]) {
 
   std::mt19937 rd;
   rd.seed(42);
-  std::uniform_real_distribution<double> dist(-0.1, 0.1);
+  std::uniform_real_distribution<double> dist(-0.05, 0.05);
 
   // Timing
   auto start_time = std::chrono::high_resolution_clock::now();
@@ -340,7 +340,7 @@ int main(int argc, char *argv[]) {
   std::chrono::duration<double> elapsed = end_time - start_time;
 
   // Print runtime to stdout
-  std::cout << "Total runtime: " << elapsed.count() << " seconds" << std::endl;
+  std::cout << "Elapsed time = " << elapsed.count() << " (s)\n";
 
   // Close output file if it was opened
   if (save_output) {

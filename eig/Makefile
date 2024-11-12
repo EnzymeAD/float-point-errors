@@ -59,8 +59,9 @@ eig-fpopt.o: eig.cpp eig.txt
 		-mllvm -fpopt-acc-dom-thres=0.0 \
 		-mllvm -enzyme-print-fpopt \
 		-mllvm -fpopt-cache-path=cache \
-		-mllvm -herbie-timeout=1000 \
-        -mllvm -herbie-num-threads=8 \
+		-mllvm -herbie-timeout=3000 \
+		-mllvm -herbie-num-iters=4 \
+        -mllvm -herbie-num-threads=12 \
 		-mllvm --fpopt-cost-model-path=cm.csv \
 		-o $@
 

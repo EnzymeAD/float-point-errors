@@ -6,7 +6,7 @@ import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-NUM_PARALLEL = 16
+NUM_PARALLEL = 32
 
 HOME = "/home/sbrantq"
 ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
@@ -62,20 +62,6 @@ FPOPTFLAGS_BASE = [
     "--fpopt-cost-model-path=cm.csv",
 ]
 
-BUDGETS = [
-    -4860000,
-    -4670000,
-    -4480000,
-    -4290000,
-    0,
-    1980000,
-    204610000,
-    205490000,
-    208340000,
-    409240000,
-    410120000,
-    412970000,
-]
 
 LOG_DIR = "logs"
 OUTPUT_DIR = "tmp"
@@ -116,16 +102,34 @@ def compile_fpopt(budget):
     return (budget, success, log_file)
 
 
+def load_budgets(file_path):
+    try:
+        with open(file_path, "r") as f:
+            line = f.readline()
+            budgets = [int(budget.strip()) for budget in line.split(",") if budget.strip()]
+        return budgets
+    except FileNotFoundError:
+        print(f"Budget file {file_path} not found.")
+        return []
+    except ValueError as e:
+        print(f"Error parsing budgets from {file_path}: {e}")
+        return []
+
+
 def main():
     num_workers = NUM_PARALLEL
-
-    print(f"Starting compilation of eig-fpopt.exe with {len(BUDGETS)} budgets using {num_workers} parallel workers.")
 
     compiled = []
     failed = []
 
+    BUDGET_PATH = "budgets.txt"
+    budgets = load_budgets(BUDGET_PATH)
+    print(f"Testing {len(budgets)} budgets from {BUDGET_PATH}")
+
+    print(f"Starting compilation of eig-fpopt.exe with {len(budgets)} budgets using {num_workers} parallel workers.")
+
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        future_to_budget = {executor.submit(compile_fpopt, budget): budget for budget in BUDGETS}
+        future_to_budget = {executor.submit(compile_fpopt, budget): budget for budget in budgets}
 
         for future in tqdm(as_completed(future_to_budget), total=len(future_to_budget), desc="Compiling"):
             budget = future_to_budget[future]
@@ -140,7 +144,7 @@ def main():
                 failed.append(budget)
 
     print("\nCompilation Summary:")
-    print(f"Total Budgets: {len(BUDGETS)}")
+    print(f"Total Budgets: {len(budgets)}")
     print(f"Successfully Compiled: {len(compiled)}")
     print(f"Failed Compilations: {len(failed)}")
 
