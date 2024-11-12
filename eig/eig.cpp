@@ -279,7 +279,7 @@ int main(int argc, char *argv[]) {
 
   std::mt19937 rd;
   rd.seed(42);
-  std::uniform_real_distribution<double> dist(-0.05, 0.05);
+  std::uniform_real_distribution<double> dist(-0.1, 0.1);
 
   // Timing
   auto start_time = std::chrono::high_resolution_clock::now();
