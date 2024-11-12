@@ -52,7 +52,7 @@ dquat-fpopt.o: dquat.cpp dquat.txt
 		-mllvm -fpopt-log-path=dquat.txt \
 		-mllvm -fpopt-enable-solver \
 		-mllvm -fpopt-enable-pt \
-		-mllvm -fpopt-target-func-regex=dquat \
+		-mllvm -fpopt-target-func-regex=dquat_demap_T \
 		-mllvm -fpopt-comp-cost-budget=0 \
 		-mllvm -fpopt-num-samples=1024 \
 		-mllvm -fpopt-cost-dom-thres=0.0 \
@@ -61,7 +61,7 @@ dquat-fpopt.o: dquat.cpp dquat.txt
 		-mllvm -fpopt-cache-path=cache \
 		-mllvm -herbie-timeout=2000 \
         -mllvm -herbie-num-threads=6 \
-		-mllvm --fpopt-cost-model-path=cm.csv \
+		-mllvm -fpopt-cost-model-path=cm.csv \
 		-o $@
 
 clean:

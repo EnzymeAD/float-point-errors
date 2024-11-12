@@ -62,7 +62,7 @@ eig-fpopt.o: eig.cpp eig.txt
 		-mllvm -herbie-timeout=3000 \
 		-mllvm -herbie-num-iters=4 \
         -mllvm -herbie-num-threads=12 \
-		-mllvm --fpopt-cost-model-path=cm.csv \
+		-mllvm -fpopt-cost-model-path=cm.csv \
 		-o $@
 
 clean:
