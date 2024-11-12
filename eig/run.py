@@ -49,15 +49,32 @@ FPOPTFLAGS_BASE = [
     "-mllvm",
     "--fpopt-enable-pt",
     "-mllvm",
+    "--fpopt-cost-dom-thres=0.0",
+    "-mllvm",
+    "--fpopt-acc-dom-thres=0.0",
+    "-mllvm",
     "--fpopt-comp-cost-budget={budget}",
     "-mllvm",
-    "--fpopt-num-samples=1000",
+    "--fpopt-cache-path=cache",
+    "-mllvm",
+    "--fpopt-num-samples=1024",
     "-mllvm",
     "--fpopt-cost-model-path=cm.csv",
 ]
 
 BUDGETS = [
-    # ?
+    -4860000,
+    -4670000,
+    -4480000,
+    -4290000,
+    0,
+    1980000,
+    204610000,
+    205490000,
+    208340000,
+    409240000,
+    410120000,
+    412970000,
 ]
 
 LOG_DIR = "logs"
@@ -102,9 +119,7 @@ def compile_fpopt(budget):
 def main():
     num_workers = NUM_PARALLEL
 
-    print(
-        f"Starting compilation of eig-fpopt.exe with {len(BUDGETS)} budgets using {num_workers} parallel workers."
-    )
+    print(f"Starting compilation of eig-fpopt.exe with {len(BUDGETS)} budgets using {num_workers} parallel workers.")
 
     compiled = []
     failed = []

@@ -9,7 +9,7 @@ SHELL = /bin/sh
 CXX = $(CLANG_PATH)/clang++
 LLC = $(CLANG_PATH)/llc
 
-SOURCES = eig.cpp
+SOURCES = dquat.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 
 CXXFLAGS = -I$(HOME)/include -L$(HOME)/lib \
@@ -23,13 +23,13 @@ CXXFLAGS = -I$(HOME)/include -L$(HOME)/lib \
            -mllvm -enzyme-inline \
            -ffast-math -fno-finite-math-only
 
-all: eig.exe eig-logged.exe eig-fpopt.exe
+all: dquat.exe dquat-logged.exe dquat-fpopt.exe
 
-eig.exe: $(SOURCES)
+dquat.exe: $(SOURCES)
 	@echo "Building original executable: $@"
 	time $(CXX) $(SOURCES) $(CXXFLAGS) -lm -o $@
 
-eig-logged.exe: $(SOURCES) fp-logger.o
+dquat-logged.exe: $(SOURCES) fp-logger.o
 	@echo "Building logged executable: $@"
 	time $(CXX) $(SOURCES) fp-logger.o $(CXXFLAGS) -lm -o $@ -DLOGGED
 
@@ -37,30 +37,30 @@ fp-logger.o: fp-logger.cpp
 	@echo "Compiling fp-logger.o"
 	time $(CXX) -c fp-logger.cpp $(CXXFLAGS) -o $@
 
-eig-fpopt.exe: eig-fpopt.o
+dquat-fpopt.exe: dquat-fpopt.o
 	@echo "Building optimized executable: $@"
-	time $(CXX) eig-fpopt.o $(CXXFLAGS) -lm -o $@
+	time $(CXX) dquat-fpopt.o $(CXXFLAGS) -lm -o $@
 
-eig.txt: eig-logged.exe
+dquat.txt: dquat-logged.exe
 	@echo "Running logged executable: $<"
 	./$< > $@
 
-eig-fpopt.o: eig.cpp eig.txt
+dquat-fpopt.o: dquat.cpp dquat.txt
 	@echo "Compiling optimized object: $@"
 	time $(CXX) -c $(SOURCES) $(CXXFLAGS) \
 		-mllvm -enzyme-enable-fpopt \
-		-mllvm -fpopt-log-path=eig.txt \
+		-mllvm -fpopt-log-path=dquat.txt \
 		-mllvm -fpopt-enable-solver \
 		-mllvm -fpopt-enable-pt \
-		-mllvm -fpopt-target-func-regex=eig \
+		-mllvm -fpopt-target-func-regex=dquat \
 		-mllvm -fpopt-comp-cost-budget=0 \
 		-mllvm -fpopt-num-samples=1024 \
 		-mllvm -fpopt-cost-dom-thres=0.0 \
 		-mllvm -fpopt-acc-dom-thres=0.0 \
 		-mllvm -enzyme-print-fpopt \
 		-mllvm -fpopt-cache-path=cache \
-		-mllvm -herbie-timeout=1000 \
-        -mllvm -herbie-num-threads=8 \
+		-mllvm -herbie-timeout=2000 \
+        -mllvm -herbie-num-threads=6 \
 		-mllvm --fpopt-cost-model-path=cm.csv \
 		-o $@
 
