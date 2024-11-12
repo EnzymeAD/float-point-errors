@@ -245,8 +245,10 @@ int main(int argc, char *argv[]) {
 
     double dquat_dexpmap_t[emapdim * qdim] = {};
 #ifdef LOGGED
-    double dquat_dexpmap_t_grad[emapdim * qdim] = {};
-    double emap_grad[emapdim] = {};
+    double dquat_dexpmap_t_grad[emapdim * qdim];
+    std::fill(dquat_dexpmap_t_grad, dquat_dexpmap_t_grad + emapdim * qdim, 1.0);
+    double emap_grad[emapdim];
+    std::fill(emap_grad, emap_grad + emapdim, 1.0);
     __enzyme_autodiff<void>((void *)dquat_demap_T, enzyme_dup, dquat_dexpmap_t,
                             dquat_dexpmap_t_grad, enzyme_dup, emap, emap_grad);
 #else

@@ -301,7 +301,15 @@ int main(int argc, char *argv[]) {
     Eigensystem res;
 #ifdef LOGGED
     mat3 A_grad;
+    for (int i = 0; i < 3; ++i)
+      for (int j = 0; j < 3; ++j)
+        A_grad[i][j] = 1.0;
     Eigensystem res_grad;
+    for (int i = 0; i < 3; ++i)
+      for (int j = 0; j < 3; ++j)
+        res_grad.X[i][j] = 1.0;
+    for (int i = 0; i < 3; ++i)
+      res_grad.lambda[i] = 1.0;
     __enzyme_autodiff<void>((void *)eig, enzyme_dup, &A, &A_grad, enzyme_dup,
                             &res, &res_grad);
 #else
