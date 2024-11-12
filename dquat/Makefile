@@ -57,6 +57,7 @@ dquat-fpopt.o: dquat.cpp dquat.txt
 		-mllvm -fpopt-num-samples=1024 \
 		-mllvm -fpopt-cost-dom-thres=0.0 \
 		-mllvm -fpopt-acc-dom-thres=0.0 \
+		-mllvm -fpopt-early-prune \
 		-mllvm -enzyme-print-fpopt \
 		-mllvm -fpopt-cache-path=cache \
 		-mllvm -herbie-timeout=2000 \
