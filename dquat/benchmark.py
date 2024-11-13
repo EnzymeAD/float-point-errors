@@ -94,13 +94,13 @@ def collect_output(executable, output_file):
     )
 
 
-def compute_error(reference_output, test_output):
-    return compute_error_geometric_average(reference_output, test_output)
+def compute_error(reference_output, test_output, max_iterations):
+    return compute_error_geometric_average(reference_output, test_output, max_iterations)
 
 
-def compute_error_geometric_average(reference_output, test_output):
-    ref_matrices_dict = extract_all_matrices(reference_output)
-    test_matrices_dict = extract_all_matrices(test_output)
+def compute_error_geometric_average(reference_output, test_output, max_iterations):
+    ref_matrices_dict = extract_all_matrices(reference_output, max_iterations)
+    test_matrices_dict = extract_all_matrices(test_output, max_iterations)
 
     if ref_matrices_dict is None or test_matrices_dict is None:
         print("Could not extract matrices for error computation.")
@@ -114,11 +114,14 @@ def compute_error_geometric_average(reference_output, test_output):
 
     ref_norm = {}
     for iteration in ref_matrices_dict:
+        if iteration > max_iterations:
+            break
         ref_matrix = ref_matrices_dict[iteration]
-        print(ref_matrix)
-        ref_norm[iteration] = np.linalg.norm(ref_matrix, "fro")
+        ref_norm[iteration] = np.linalg.norm(ref_matrix, ord="fro")
 
     for iteration in ref_matrices_dict:
+        if iteration > max_iterations:
+            break
         ref_matrix = ref_matrices_dict[iteration]
         test_matrix = test_matrices_dict.get(iteration, None)
 
@@ -136,7 +139,8 @@ def compute_error_geometric_average(reference_output, test_output):
             continue
 
         diff = ref_matrix - test_matrix
-        fro_diff = np.linalg.norm(diff, "fro")
+        # print(diff)
+        fro_diff = np.linalg.norm(diff, ord="fro")
         relative_diff = fro_diff / norm_ref
         all_relative_diffs.append(relative_diff)
 
@@ -156,9 +160,10 @@ def compute_error_geometric_average(reference_output, test_output):
         return np.nan
 
 
-def extract_all_matrices(output_file):
+def extract_all_matrices(output_file, max_iterations):
     matrices_dict = {}
     current_iteration = None
+    iterations_processed = 0
 
     with open(output_file, "r") as f:
         lines = f.readlines()
@@ -170,6 +175,9 @@ def extract_all_matrices(output_file):
         if iter_match:
             current_iteration = int(iter_match.group(1))
             matrices_dict[current_iteration] = []
+            iterations_processed += 1
+            if max_iterations is not None and iterations_processed > max_iterations:
+                break
             idx += 1
             continue
 
@@ -196,6 +204,7 @@ def extract_all_matrices(output_file):
                     matrix.append(vec)
                 matrix = np.array(matrix)
                 matrices_dict[current_iteration] = matrix
+                idx += 4
                 continue
         idx += 1
     if not matrices_dict:
@@ -355,7 +364,7 @@ def compute_geometric_average(differences):
     return np.expm1(np.mean(log_diffs))
 
 
-def accuracy_task(executable, reference_output="dquat_gold.txt"):
+def accuracy_task(executable, max_iterations, reference_output="dquat_gold.txt"):
     m = re.match(r".*dquat-fpopt-(.*)\.exe", executable)
     if m:
         budget = int(m.group(1))
@@ -364,7 +373,7 @@ def accuracy_task(executable, reference_output="dquat_gold.txt"):
         return None, None
     output_file = os.path.join("outputs", f"output_budget_{budget}.txt")
     collect_output(executable, output_file)
-    error = compute_error(reference_output, output_file)
+    error = compute_error(reference_output, output_file, max_iterations)
     if error is not None:
         print(f"Relative error for budget {budget}: {error}%")
     else:
@@ -392,8 +401,13 @@ def runtime_task(executable, reference_output="dquat_gold.txt"):
 def main():
     parser = argparse.ArgumentParser(description="Measure dquat experiments and plot results")
     parser.add_argument("--plot-only", action="store_true", help="Only plot using data from saved file")
+    parser.add_argument(
+        "--max-iterations", type=int, default=1000, help="Maximum number of iterations to check for accuracy"
+    )
     args = parser.parse_args()
     plot_only = args.plot_only
+    max_iterations = args.max_iterations
+
     if plot_only:
         if not os.path.exists("measurements.pkl"):
             print("Measurements file 'measurements.pkl' does not exist.")
@@ -401,9 +415,14 @@ def main():
         with open("measurements.pkl", "rb") as f:
             data = pickle.load(f)
         plot_results(
-            data["budgets"], data["runtimes"], data["errors"], data["original_error"], data["original_runtime"]
+            data["budgets"],
+            data["runtimes"],
+            data["errors"],
+            data["original_error"],
+            data["original_runtime"],
         )
         sys.exit(0)
+
     if not os.path.exists("plots"):
         os.makedirs("plots")
     if not os.path.exists("outputs"):
@@ -442,7 +461,7 @@ def main():
     if not os.path.exists(original_output_file):
         collect_output(original_executable, original_output_file)
 
-    original_error = compute_error(reference_output, original_output_file)
+    original_error = compute_error(reference_output, original_output_file, max_iterations)
     if original_error is not None:
         print(f"Relative error for the original binary: {original_error}%")
     else:
@@ -453,7 +472,7 @@ def main():
     print("Starting accuracy measurements...")
     errors = {}
     with multiprocessing.Pool(processes=32) as pool:
-        results = pool.map(accuracy_task, executable_paths)
+        results = pool.starmap(accuracy_task, [(exe, max_iterations) for exe in executable_paths])
         for result in results:
             if result and result[1] is not None:
                 budget = result[0]

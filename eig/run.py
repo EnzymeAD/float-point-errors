@@ -6,7 +6,7 @@ import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-NUM_PARALLEL = 32
+NUM_PARALLEL = 128
 
 HOME = "/home/sbrantq"
 ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
@@ -56,6 +56,8 @@ FPOPTFLAGS_BASE = [
     "--fpopt-comp-cost-budget={budget}",
     "-mllvm",
     "--fpopt-cache-path=cache",
+    "-mllvm",
+    "--fpopt-early-prune",
     "-mllvm",
     "--fpopt-num-samples=1024",
     "-mllvm",

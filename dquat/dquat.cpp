@@ -199,38 +199,47 @@ int main(int argc, char *argv[]) {
     out_stream = &outfile;
   }
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  std::mt19937 gen;
+  gen.seed(42);
 
   std::uniform_real_distribution<> dis_case1(-1e-9,
                                              1e-9); // 1e-90 <= theta < 1e-9
-  std::uniform_real_distribution<> dis_case2(-1e-8, 1e-8); // theta >= 1e-9
-  std::uniform_real_distribution<> dis_case3(-1e-90,
-                                             1e-90); // theta < 1e-90
+  std::uniform_real_distribution<> dis_case2(-1e-1, 1e-1);   // theta >= 1e-9
+  std::uniform_real_distribution<> dis_case3(-1e-90, 1e-90); // theta < 1e-90
 
   const int num_cases = 3;
-  const int tests_per_case = num_tests / num_cases;
 
   auto start_time = std::chrono::high_resolution_clock::now();
 
   for (int test = 0; test < num_tests; ++test) {
-    double emap[emapdim] = {0.0};
+    double emap[emapdim] = {};
 
-    if (test < tests_per_case) {
+    // Determine the current case by cycling through the cases
+    int current_case = test % num_cases;
+
+    switch (current_case) {
+    case 0:
       // Case 0: theta < 1e-90 (effectively zero)
       for (size_t i = 0; i < emapdim; i++) {
         emap[i] = dis_case3(gen);
       }
-    } else if (test < 2 * tests_per_case) {
+      break;
+    case 1:
       // Case 1: 1e-90 <= theta < 1e-9 (small rotations)
       for (size_t i = 0; i < emapdim; i++) {
         emap[i] = dis_case1(gen);
       }
-    } else {
+      break;
+    case 2:
       // Case 2: theta >= 1e-9 (larger rotations)
       for (size_t i = 0; i < emapdim; i++) {
         emap[i] = dis_case2(gen);
       }
+      break;
+    default:
+      // This should never happen
+      std::cerr << "Invalid case encountered!" << std::endl;
+      return 1;
     }
 
     // double quat[qdim] = {};
