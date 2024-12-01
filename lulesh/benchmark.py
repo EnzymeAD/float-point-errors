@@ -13,6 +13,7 @@ import multiprocessing
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 from tqdm import tqdm
+import math
 
 NUM_RUNS = 1
 SIZE = 27000
@@ -135,7 +136,10 @@ def extract_energy(output_file, iteration):
                             if first_val_str.lower() in ["nan", "-nan"]:
                                 energy_value = np.nan
                             else:
-                                energy_value = float(first_val_str)
+                                try:
+                                    energy_value = float(first_val_str)
+                                except ValueError:
+                                    energy_value = np.nan
 
                             return energy_value
                         else:
@@ -159,6 +163,8 @@ def plot_results(
     output_format="png",
     plots_dir="plots",
 ):
+    rcParams["font.family"] = "serif"
+    rcParams["font.serif"] = ["Linux Libertine"]
     rcParams["font.size"] = 20
     rcParams["axes.titlesize"] = 24
     rcParams["axes.labelsize"] = 20
@@ -200,9 +206,9 @@ def plot_results(
     ax2.tick_params(axis="y", labelcolor=color_error)
     ax2.axhline(y=original_error, color="green", linestyle="--", label="Original Relative Error")
     ax2.set_yscale("symlog", linthresh=1e-14)
-    ax2.set_ylim(bottom=0)
+    ax2.set_ylim(bottom=-1e-14)
 
-    ax1.set_title("Computation Cost Budget vs Runtime and Relative Error")
+    # ax1.set_title("Computation Cost Budget vs Runtime\nand Relative Error for LULESH")
     ax1.grid(True)
 
     lines = [line1, line3]
@@ -211,12 +217,13 @@ def plot_results(
     labels.append("Original Runtime")
     lines.append(plt.Line2D([0], [0], color="green", linestyle="--"))
     labels.append("Original Relative Error")
+
     ax1.legend(
         lines,
         labels,
         loc="upper center",
         bbox_to_anchor=(0.5, -0.15),
-        ncol=3,
+        ncol=2,
         borderaxespad=0.0,
         frameon=False,
     )
@@ -226,7 +233,7 @@ def plot_results(
 
     os.makedirs(plots_dir, exist_ok=True)
 
-    plot_filename1 = os.path.join(plots_dir, "runtime_error_plot.png")
+    plot_filename1 = os.path.join(plots_dir, f"lulesh_runtime_error.{output_format}")
     plt.savefig(plot_filename1, bbox_inches="tight", dpi=300)
     plt.close(fig1)
     print(f"First plot saved to {plot_filename1}")
@@ -235,7 +242,7 @@ def plot_results(
 
     ax3.set_xlabel("Runtimes (seconds)")
     ax3.set_ylabel("Relative Errors (%)")
-    ax3.set_title(f"Pareto Front of Optimized Programs ({prefix})")
+    # ax3.set_title(f"Pareto Front of Optimized LULESH Programs")
 
     scatter1 = ax3.scatter(runtimes, adjusted_errors, label="Optimized Programs", color="blue")
 
@@ -263,7 +270,8 @@ def plot_results(
     (line_pareto,) = ax3.plot(
         pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front"
     )
-    ax3.set_yscale("log")
+    ax3.set_yscale("symlog", linthresh=1e-14)
+    ax3.set_ylim(bottom=-1e-14)
 
     ax3.grid(True)
 
@@ -278,7 +286,7 @@ def plot_results(
         pareto_labels,
         loc="upper center",
         bbox_to_anchor=(0.5, -0.15),
-        ncol=len(pareto_lines),
+        ncol=2,
         borderaxespad=0.0,
         frameon=False,
     )
@@ -286,10 +294,106 @@ def plot_results(
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.25)
 
-    plot_filename2 = os.path.join(plots_dir, f"pareto_front_plot_{prefix}.{output_format}")
+    plot_filename2 = os.path.join(plots_dir, f"lulesh_pareto.{output_format}")
     plt.savefig(plot_filename2, bbox_inches="tight", dpi=300)
     plt.close(fig2)
     print(f"Second plot saved to {plot_filename2}")
+
+
+def compute_geometric_average(differences):
+    valid_diffs = [1 + d for d in differences if d >= 0]
+    if not valid_diffs:
+        return np.nan
+    log_diffs = [np.log1p(d) for d in valid_diffs]
+    return np.expm1(np.mean(log_diffs))
+
+
+def analyze_data(data, thresholds=None):
+    budgets = data["budgets"]
+    runtimes = data["runtimes"]
+    errors = data["errors"]
+    original_runtime = data["original_runtime"]
+    original_error = data["original_error"]
+    print("Original relative error: ", original_error)
+
+    if thresholds is None:
+        thresholds = [0, 1e-16, 1e-15, 1e-14, 1e-12, 1e-10, 1e-9, 1e-8, 1e-6, 1e-4, 1e-2, 1e-1, 0.2, 0.3, 0.4, 0.5, 0.9, 1]
+
+    # Compute original digits of accuracy
+    if original_error == 0:
+        original_digits = 16
+    elif original_error is not None:
+        original_digits = min(-math.log10(original_error / 100), 16)
+    else:
+        original_digits = None
+
+    print(f"\nOriginal program has {original_digits:.2f} decimal digits of accuracy.")
+
+    # For each optimized program, compute the digits of accuracy
+    digits_list = []
+    for err in errors:
+        if err == 0:
+            digits = 16
+        elif err is not None:
+            digits = min(-math.log10(err / 100), 16)
+        else:
+            digits = None
+        digits_list.append(digits)
+
+    # Compute accuracy improvements
+    accuracy_improvements = []
+    for digits in digits_list:
+        if digits is not None and original_digits is not None:
+            improvement = digits - original_digits
+            accuracy_improvements.append(improvement)
+        else:
+            accuracy_improvements.append(None)
+
+    # Find the maximum accuracy improvement
+    max_improvement = None
+    for improvement in accuracy_improvements:
+        if improvement is not None and improvement > 0:
+            if max_improvement is None or improvement > max_improvement:
+                max_improvement = improvement
+    if max_improvement is None:
+        max_improvement = 0.0
+
+    print(f"Maximum accuracy improvement: {max_improvement:.2f} decimal digits")
+
+    # For each threshold, find the minimum runtime ratio
+    min_runtime_ratios = {}
+    for threshold in thresholds:
+        min_ratio = None
+        for err, runtime in zip(errors, runtimes):
+            if err is not None and runtime is not None and err <= threshold * 100:
+                if original_runtime == 0:
+                    continue  # Avoid division by zero
+                runtime_ratio = runtime / original_runtime
+                if min_ratio is None or runtime_ratio < min_ratio:
+                    min_ratio = runtime_ratio
+        if min_ratio is not None:
+            min_runtime_ratios[threshold] = min_ratio
+
+    # Compute percentage of runtime improvements
+    overall_runtime_improvements = {}
+    for threshold in thresholds:
+        ratio = min_runtime_ratios.get(threshold)
+        if ratio is not None:
+            percentage_improvement = (1 - ratio) * 100
+            overall_runtime_improvements[threshold] = percentage_improvement
+        else:
+            overall_runtime_improvements[threshold] = None
+
+    # Print overall runtime improvements per threshold
+    print("\nPercentage of runtime improvements while allowing some level of relative error:")
+    for threshold in thresholds:
+        percentage_improvement = overall_runtime_improvements[threshold]
+        if percentage_improvement is not None:
+            print(
+                f"Allowed relative error ≤ {threshold}: {percentage_improvement:.2f}% runtime reduction / {1 / (1 - percentage_improvement / 100):.2f}x speedup"
+            )
+        else:
+            print(f"Allowed relative error ≤ {threshold}: No data")
 
 
 def accuracy_task(executable, reference_output="lulesh_gold.txt"):
@@ -329,8 +433,13 @@ def runtime_task(executable, reference_output="lulesh_gold.txt"):
 def main():
     parser = argparse.ArgumentParser(description="Measure LULESH experiments and plot results")
     parser.add_argument("--plot-only", action="store_true", help="Only plot using data from saved file")
+    parser.add_argument(
+        "--output-format", type=str, choices=["png", "pdf"], default="png", help="Output format for plots"
+    )
     args = parser.parse_args()
     plot_only = args.plot_only
+    output_format = args.output_format
+
     if plot_only:
         if not os.path.exists("measurements.pkl"):
             print("Measurements file 'measurements.pkl' does not exist.")
@@ -338,9 +447,16 @@ def main():
         with open("measurements.pkl", "rb") as f:
             data = pickle.load(f)
         plot_results(
-            data["budgets"], data["runtimes"], data["errors"], data["original_error"], data["original_runtime"]
+            data["budgets"],
+            data["runtimes"],
+            data["errors"],
+            data["original_error"],
+            data["original_runtime"],
+            output_format=output_format,
         )
+        analyze_data(data)
         sys.exit(0)
+
     if not os.path.exists("plots"):
         os.makedirs("plots")
     if not os.path.exists("outputs"):
@@ -389,7 +505,8 @@ def main():
 
     print("Starting accuracy measurements...")
     errors = {}
-    with multiprocessing.Pool(processes=128) as pool:
+    cpu_count = min(160, multiprocessing.cpu_count())
+    with multiprocessing.Pool(processes=cpu_count) as pool:
         results = pool.map(accuracy_task, executable_paths)
         for result in results:
             if result and result[1] is not None:
@@ -414,7 +531,15 @@ def main():
     with open("measurements.pkl", "wb") as f:
         pickle.dump(data, f)
     print("Measurements saved to 'measurements.pkl'")
-    plot_results(data["budgets"], data["runtimes"], data["errors"], data["original_error"], data["original_runtime"])
+    plot_results(
+        data["budgets"],
+        data["runtimes"],
+        data["errors"],
+        data["original_error"],
+        data["original_runtime"],
+        output_format=output_format,
+    )
+    analyze_data(data)
 
 
 if __name__ == "__main__":

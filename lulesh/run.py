@@ -6,6 +6,7 @@ import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from tqdm import tqdm
+import random
 
 HOME = "/home/sbrantq"
 
@@ -196,9 +197,11 @@ def main():
 
     BUDGET_PATH = "budgets.txt"
     budgets = load_budgets(BUDGET_PATH)
+    random.shuffle(budgets)
+    print("Shuffled budgets:", budgets)
     print(f"Testing {len(budgets)} budgets from {BUDGET_PATH}")
 
-    max_workers = 128
+    max_workers = 160
     executables = []
     failed_budgets = []
 
