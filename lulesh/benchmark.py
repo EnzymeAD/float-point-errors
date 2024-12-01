@@ -24,7 +24,6 @@ TIMEOUT_SECONDS = 1000
 def run_command(
     command, description, capture_output=False, output_file=None, verbose=True, env=None, timeout=TIMEOUT_SECONDS
 ):
-    # print("Command: ", " ".join(command))
     try:
         if capture_output and output_file:
             with open(output_file, "w") as f:
@@ -193,30 +192,31 @@ def plot_results(
     color_runtime = "tab:blue"
     ax1.set_xlabel("Computation Cost Budget")
     ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
-    (line1,) = ax1.plot(budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime)
+    scatter1 = ax1.scatter(budgets, runtimes, marker="o", label="Optimized Runtimes", color=color_runtime, s=5)
     ax1.tick_params(axis="y", labelcolor=color_runtime)
     ax1.axhline(y=original_runtime, color="blue", linestyle="--", label="Original Runtime")
 
     ax2 = ax1.twinx()
     color_error = "tab:green"
     ax2.set_ylabel("Relative Errors (%)", color=color_error)
-    (line3,) = ax2.plot(
-        budgets, adjusted_errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
+    scatter2 = ax2.scatter(
+        budgets, adjusted_errors, marker="s", label="Optimized Relative Errors", color=color_error, s=5
     )
     ax2.tick_params(axis="y", labelcolor=color_error)
     ax2.axhline(y=original_error, color="green", linestyle="--", label="Original Relative Error")
+    ax2.axhline(y=0, color="gold", linestyle="-", label="Zero Relative Error")
     ax2.set_yscale("symlog", linthresh=1e-14)
     ax2.set_ylim(bottom=-1e-14)
 
-    # ax1.set_title("Computation Cost Budget vs Runtime\nand Relative Error for LULESH")
     ax1.grid(True)
 
-    lines = [line1, line3]
+    lines = [scatter1, scatter2]
     labels = [line.get_label() for line in lines]
     lines.append(plt.Line2D([0], [0], color="blue", linestyle="--"))
     labels.append("Original Runtime")
     lines.append(plt.Line2D([0], [0], color="green", linestyle="--"))
     labels.append("Original Relative Error")
+    lines.append(plt.Line2D([0], [0], color="gold", linestyle="-"))
 
     ax1.legend(
         lines,
@@ -242,9 +242,7 @@ def plot_results(
 
     ax3.set_xlabel("Runtimes (seconds)")
     ax3.set_ylabel("Relative Errors (%)")
-    # ax3.set_title(f"Pareto Front of Optimized LULESH Programs")
-
-    scatter1 = ax3.scatter(runtimes, adjusted_errors, label="Optimized Programs", color="blue")
+    scatter1 = ax3.scatter(runtimes, adjusted_errors, label="Optimized Programs", color="blue", s=1)
 
     if original_runtime is not None and original_error is not None:
         scatter2 = ax3.scatter(
@@ -252,7 +250,7 @@ def plot_results(
             original_error,
             marker="x",
             color="red",
-            s=100,
+            s=50,
             label="Original Program",
         )
 
@@ -262,13 +260,13 @@ def plot_results(
 
     pareto_front = [sorted_points[0]]
     for point in sorted_points[1:]:
-        if point[1] <= pareto_front[-1][1]:
+        if point[1] < pareto_front[-1][1]:
             pareto_front.append(point)
 
     pareto_front = np.array(pareto_front)
 
     (line_pareto,) = ax3.plot(
-        pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front"
+        pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front", linewidth=1
     )
     ax3.set_yscale("symlog", linthresh=1e-14)
     ax3.set_ylim(bottom=-1e-14)
@@ -280,6 +278,7 @@ def plot_results(
     if original_runtime is not None and original_error is not None:
         pareto_lines.append(scatter2)
         pareto_labels.append(scatter2.get_label())
+
 
     ax3.legend(
         pareto_lines,
@@ -317,9 +316,27 @@ def analyze_data(data, thresholds=None):
     print("Original relative error: ", original_error)
 
     if thresholds is None:
-        thresholds = [0, 1e-16, 1e-15, 1e-14, 1e-12, 1e-10, 1e-9, 1e-8, 1e-6, 1e-4, 1e-2, 1e-1, 0.2, 0.3, 0.4, 0.5, 0.9, 1]
+        thresholds = [
+            0,
+            1e-16,
+            1e-15,
+            1e-14,
+            1e-12,
+            1e-10,
+            1e-9,
+            1e-8,
+            1e-6,
+            1e-4,
+            1e-2,
+            1e-1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.9,
+            1,
+        ]
 
-    # Compute original digits of accuracy
     if original_error == 0:
         original_digits = 16
     elif original_error is not None:
@@ -329,7 +346,6 @@ def analyze_data(data, thresholds=None):
 
     print(f"\nOriginal program has {original_digits:.2f} decimal digits of accuracy.")
 
-    # For each optimized program, compute the digits of accuracy
     digits_list = []
     for err in errors:
         if err == 0:
@@ -340,7 +356,6 @@ def analyze_data(data, thresholds=None):
             digits = None
         digits_list.append(digits)
 
-    # Compute accuracy improvements
     accuracy_improvements = []
     for digits in digits_list:
         if digits is not None and original_digits is not None:
@@ -349,7 +364,6 @@ def analyze_data(data, thresholds=None):
         else:
             accuracy_improvements.append(None)
 
-    # Find the maximum accuracy improvement
     max_improvement = None
     for improvement in accuracy_improvements:
         if improvement is not None and improvement > 0:
@@ -360,21 +374,19 @@ def analyze_data(data, thresholds=None):
 
     print(f"Maximum accuracy improvement: {max_improvement:.2f} decimal digits")
 
-    # For each threshold, find the minimum runtime ratio
     min_runtime_ratios = {}
     for threshold in thresholds:
         min_ratio = None
         for err, runtime in zip(errors, runtimes):
             if err is not None and runtime is not None and err <= threshold * 100:
                 if original_runtime == 0:
-                    continue  # Avoid division by zero
+                    continue
                 runtime_ratio = runtime / original_runtime
                 if min_ratio is None or runtime_ratio < min_ratio:
                     min_ratio = runtime_ratio
         if min_ratio is not None:
             min_runtime_ratios[threshold] = min_ratio
 
-    # Compute percentage of runtime improvements
     overall_runtime_improvements = {}
     for threshold in thresholds:
         ratio = min_runtime_ratios.get(threshold)
@@ -384,7 +396,6 @@ def analyze_data(data, thresholds=None):
         else:
             overall_runtime_improvements[threshold] = None
 
-    # Print overall runtime improvements per threshold
     print("\nPercentage of runtime improvements while allowing some level of relative error:")
     for threshold in thresholds:
         percentage_improvement = overall_runtime_improvements[threshold]
