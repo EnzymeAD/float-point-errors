@@ -1,0 +1,17 @@
+
+Version 1.2
+-----------
+
+  - Duplicate vertices detected when reading mesh
+  - Face-face interactions between elements checked when reading mesh
+
+  - Trust-region optimization code added
+  - Hybrid trust-region, line-search optimization code added
+
+  - Include support for two distance-from-target metrics
+    - Fast Gauss-Seidel methods are supported
+    - Modified Gram-Schmidt used to obtain the required matrices
+    - Code available in the generator directory
+
+  - Improved efficiency in the optimization codes
+

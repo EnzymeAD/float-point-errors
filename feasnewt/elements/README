@@ -1,0 +1,11 @@
+
+
+Need to implement functions for the local smoothing case:
+
+  aux2l		- function, gradient, and hessian for an element
+  fcn2el	- equilateral element
+  fcn2il	- isoscles element
+  fcn3il	- isoscles tetrahedral element
+
+Need to make fast isosceles Hessian evaluations
+

@@ -1,0 +1,51 @@
+
+Constants when making the problem
+  REORDER	: reorder the mesh for cache performance
+  REFINE	: refine tet and tri meshes by adding vertex to center
+  CHECK_MESH    : check the mesh for duplicated vertices,
+                  face compatibility, and inverted elements
+  CHECK_PD      : check that preconditioner is positive definite
+  DISPLAY_MAX   : compute the element with worst quality each iteration
+                  and display to the screen
+  CHECK		: used when compiling the checker routines to include
+		  extra information
+  HEAL_MESH	: perform mesh healing
+  NAIVE		: naive computation of hessian for local method
+  BETTER	: better computation of hessian for local method
+  SWEEP		: use sweep ordering to for quads and hexes 
+                  instead of hypercube
+  USE_WEIGHT    : use randomly generated weight matrices
+		  required change to makefile to use the 'g' versions of metric
+		  and the addition of the generators
+  USE_INLINE	: inline certain functions in the code
+
+The possible metrics that can be chosen are:
+
+  METRIC=imr	: inverse mean ratio
+  METRIC=dft	: distance-from-target metric (mu1)
+  METRIC=dftt	: distance-from-target metric (mu3)
+
+TODO:
+  Add planar elements (triangles and quadrilaterals in 3D).
+  Work out how to do Fischer's inflow/outflow regions using the planar
+  elements.
+
+opt  -- global optimization codes for 2D and 3D elements
+lopt -- local optimization codes for 2D and 3D elements
+
+check -- routines to check the quality of a triangular or tetrahedral mesh
+
+fischer -- global optimization code for hex meshes (squashed boundary elements)
+           calculates boundary
+           segments boundary into pieces
+           determines vessel wall from the pieces
+	   skins to mesh to determine the distance from the boundary
+	   add an element classification and element data for the element
+	   reorients the elements so that we can use the squashed metric
+
+convert -- ????
+
+cube-clip
+  - delta = 1e-4
+  - W = I
+

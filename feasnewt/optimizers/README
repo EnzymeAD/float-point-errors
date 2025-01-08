@@ -1,0 +1,14 @@
+
+Optimization codes:
+
+  opt2_ls -- two dimensional triangular meshes with linesearch
+  opt2_tr -- two dimensional triangular meshes with trust region
+  opt2_gs -- two dimensional triangular meshes using block gauss seidel
+
+  opt3_ls -- three dimensional tetrahedral meshes with linesearch
+  opt3_tr -- three dimensional tetrahedral meshes with trust region
+  opt3_gs -- three dimensional tetrahedral meshes using block gauss seidel
+
+  pre2  -- preconditioner codes for two dimensions
+  pre3  -- preconditioner codes for three dimensions
+

@@ -1,0 +1,7 @@
+
+These functions are for the distance-from-target metric.
+
+  || T*T' - I ||       || T'*T - I ||
+  --------------  ===  --------------
+      det(T)               det(T)
+

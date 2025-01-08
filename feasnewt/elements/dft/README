@@ -1,0 +1,10 @@
+
+These functions are for the distance-from-target metric.
+
+  || T - I ||
+  -----------
+    det(T)
+
+The generator in this code may be flakey, but produces the correct
+matrices required for the local code to get the speed.
+

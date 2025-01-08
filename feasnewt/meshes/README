@@ -1,0 +1,40 @@
+
+The read and write the meshes.  There is also some checking that gets
+performed during the read.  The format for all the meshes is the following:
+
+<n>
+<c1> <c2> <c3>
+<e>
+<v1> <v2> <v3> <v4> <v5> <v6> <v7> <v8>
+<f>
+<f1>
+
+where <n> is the number of vertices followed by the initial coordinates
+(x,y,z) for each vertex, <e> is the number of elements followed by the
+list of vertices used to describe the element, and <f> is the number
+of fixed nodes followed the the node number that is fixed.
+
+The fixed nodes are optional.  The exposed faces and boundard vertices are 
+calculated and fixed.  The fixed nodes are for any internal nodes of the
+mesh that you want to fix.
+
+The following are supported:
+
+  tri - two-dimensional meshes with triangular elements (2 coord, 3 vert)
+  qua - two-dimensional meshes with quadrilateral elements (2 coord, 4 vert)
+  tet - three-dimensional meshes with tetrahedral elements (3 coord, 4 vert)
+  hex - three-dimensional meshes with hexahedral elements (3 coord, 8 vert)
+
+The quad and hex elements are to be specified in hypercube ordering.
+All indices are in C style.  That is the number go from 0 to n-1.  
+
+Degenerate elements are those that have zero area and inverted elements
+are those negative area in a right-handed coordinate system.  For
+tri and tet meshes, we print out the indices of the degenerate and inverted
+elements.  Quad and hexes are decomposed into 4 triangles and 8 tetrahehrals 
+respectively.  Bad quad and hex elements are printed along with the number
+of good, degenerate, and inverted elements in the decomposition.
+
+We make no attempt to detect an overlapping (chimera) mesh.  I am not sure
+if we can make a guarantee about the entire volumne being filled.
+ 
