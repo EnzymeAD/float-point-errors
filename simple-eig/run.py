@@ -413,7 +413,14 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
 
 
 def plot_results(
-    plots_dir, prefix, budgets, runtimes, errors, original_runtime=None, original_error=None, output_format="pdf"
+    plots_dir,
+    prefix,
+    budgets,
+    runtimes,
+    errors,
+    original_runtime=None,
+    original_error=None,
+    output_format="pdf",
 ):
     print(f"=== Plotting results to {output_format.upper()} file ===")
 
@@ -539,11 +546,11 @@ def plot_results(
     # -------------------------------------------------------------------------
     # Identify Pareto-optimal points (including the original program if provided)
     # -------------------------------------------------------------------------
-    # First, build the array of points from optimized programs.
-    optimization_points = np.array(list(zip(runtimes, errors)))
-    # If an original program is provided, add it to the set of points.
+    # Build an array with columns: runtime, error, and budget
+    optimization_points = np.array(list(zip(runtimes, errors, budgets)))
+    # If an original program is provided, add it with budget = 0 (or another indicator)
     if original_runtime is not None and original_error is not None:
-        all_points = np.vstack([optimization_points, [original_runtime, original_error]])
+        all_points = np.vstack([optimization_points, [original_runtime, original_error, 0]])
     else:
         all_points = optimization_points
 
@@ -557,6 +564,18 @@ def plot_results(
             current_best_error = all_points[idx, 1]
 
     pareto_points = all_points[pareto_optimal]
+    non_pareto_points = all_points[~pareto_optimal]
+
+    # Print Pareto-optimal points (with budgets)
+    print("\n=== Pareto Optimal Points ===")
+    for rt, err, b in pareto_points:
+        print(f"Budget: {b}, Runtime: {rt:.6f} seconds, Relative Error: {err:.6e}%")
+
+    # Print non-Pareto-optimal points (with budgets)
+    print("\n=== Non-Pareto Optimal Points ===")
+    for rt, err, b in non_pareto_points:
+        print(f"Budget: {b}, Runtime: {rt:.6f} seconds, Relative Error: {err:.6e}%")
+
     line_pareto = None
     if len(pareto_points) > 0:
         sorted_idx = np.argsort(pareto_points[:, 0])
