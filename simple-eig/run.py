@@ -7,15 +7,18 @@ import shutil
 import time
 import re
 import argparse
+import matplotlib
 import matplotlib.pyplot as plt
 import math
 import random
 import numpy as np
 from statistics import mean
 import pickle
+import seaborn as sns
 
 from tqdm import tqdm, trange
 from matplotlib import rcParams
+from matplotlib.legend_handler import HandlerTuple
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 PREFIX = "simple-eig"
@@ -410,20 +413,14 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
 
 
 def plot_results(
-    plots_dir,
-    prefix,
-    budgets,
-    runtimes,
-    errors,
-    original_runtime=None,
-    original_error=None,
-    output_format="png",
+    plots_dir, prefix, budgets, runtimes, errors, original_runtime=None, original_error=None, output_format="pdf"
 ):
     print(f"=== Plotting results to {output_format.upper()} file ===")
 
-    # Filter out entries where runtimes or errors are None
+    # Filter out invalid data
     data = list(zip(budgets, runtimes, errors))
-    filtered_data = [(b, r, e) for b, r, e in data if r is not None and e is not None]
+    # Removing budget 0 since we know it is the original program for this benchmark
+    filtered_data = [(b, r, e) for b, r, e in data if b != 0 and r is not None and e is not None]
 
     if not filtered_data:
         print("No valid data to plot.")
@@ -431,249 +428,217 @@ def plot_results(
 
     budgets, runtimes, errors = zip(*filtered_data)
 
-    rcParams["font.size"] = 20
-    rcParams["axes.titlesize"] = 24
-    rcParams["axes.labelsize"] = 20
-    rcParams["xtick.labelsize"] = 18
-    rcParams["ytick.labelsize"] = 18
-    rcParams["legend.fontsize"] = 18
+    # Print all runtime–relative error pairs sorted by budget
+    print(f"Original Program: {original_runtime:.6f} seconds, {original_error:.6e}%")
+    print("Runtime and Relative Error pairs (sorted by Computation Cost Budget):")
+    for b, r, e in zip(budgets, runtimes, errors):
+        print(f"  Budget: {b}, Runtime: {r:.6f} seconds, Relative Error: {e:.6e}%")
 
-    if output_format.lower() == "pdf":
-        # First Plot: Computation Cost Budget vs Runtime and Relative Error
-        fig1, ax1 = plt.subplots(figsize=(10, 8))  # Adjust size as needed
+    # -------------------------------------------------------------------------
+    # Use Seaborn's "whitegrid" style/palette
+    # -------------------------------------------------------------------------
+    print(plt.style.available)
+    sns.set_theme(style="whitegrid")
 
-        color_runtime = "tab:blue"
-        ax1.set_xlabel("Computation Cost Budget")
-        ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
-        (line1,) = ax1.step(
-            budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime, where="post"
-        )
-        if original_runtime is not None:
-            line2 = ax1.axhline(y=original_runtime, color=color_runtime, linestyle="--", label="Original Runtime")
-        ax1.tick_params(axis="y", labelcolor=color_runtime)
+    # (Optional) Adjust some font sizes
+    rcParams["font.family"] = "serif"
+    rcParams["font.serif"] = ["Linux Libertine"]
+    # rcParams["font.size"] = 24
+    # rcParams["axes.titlesize"] = 24
+    rcParams["axes.labelsize"] = 24
+    rcParams["xtick.labelsize"] = 20
+    rcParams["ytick.labelsize"] = 20
+    rcParams["legend.fontsize"] = 20
 
-        ax2 = ax1.twinx()
-        color_error = "tab:green"
-        ax2.set_ylabel("Relative Errors (%)", color=color_error)
-        (line3,) = ax2.step(
-            budgets,
-            errors,
-            marker="s",
-            linestyle="-",
-            label="Optimized Relative Errors",
-            color=color_error,
-            where="post",
-        )
-        if original_error is not None:
-            line4 = ax2.axhline(y=original_error, color=color_error, linestyle="--", label="Original Relative Error")
-        ax2.tick_params(axis="y", labelcolor=color_error)
-        ax2.set_yscale("symlog", linthresh=1e-14)
-        ax2.set_ylim(bottom=0)
+    # -------------------------------------------------------------------------
+    # First Plot: Budget vs. (Runtime and Relative Error)
+    # -------------------------------------------------------------------------
+    fig1, ax1 = plt.subplots(figsize=(10, 8))
 
-        ax1.set_title(f"Computation Cost Budget vs Runtime\nand Relative Error ({prefix[:-1]})")
-        ax1.grid(True)
+    color_runtime = "C0"  # Let Seaborn pick color C0
+    color_error = "C1"  # Let Seaborn pick color C1
 
-        lines = [line1, line3]
-        labels = [line.get_label() for line in lines]
-        if original_runtime is not None:
-            lines.append(line2)
-            labels.append(line2.get_label())
-        if original_error is not None:
-            lines.append(line4)
-            labels.append(line4.get_label())
+    # Plot runtimes on left axis
+    ax1.set_xlabel("Computation Cost Budget")
+    ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
+    (line1,) = ax1.step(
+        budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime, where="post"
+    )
+    if original_runtime is not None:
+        line2 = ax1.axhline(y=original_runtime, color=color_runtime, linestyle="--", label="Original Runtime")
+    ax1.tick_params(axis="y", labelcolor=color_runtime)
 
-        ax1.legend(
-            lines,
-            labels,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.15),
-            ncol=2,
-            borderaxespad=0.0,
-            frameon=False,
-        )
+    # Plot errors on right axis
+    ax2 = ax1.twinx()
+    ax2.set_ylabel("Relative Errors (%)", color=color_error)
+    (line3,) = ax2.step(
+        budgets,
+        errors,
+        marker="s",
+        linestyle="-.",
+        label="Optimized Relative Errors",
+        color=color_error,
+        where="post",
+    )
+    if original_error is not None:
+        line4 = ax2.axhline(y=original_error, color=color_error, linestyle="--", label="Original Relative Error")
+    ax2.tick_params(axis="y", labelcolor=color_error)
+    # Use a "symlog" scale with a tiny linthresh to handle near-zero errors
+    ax2.set_yscale("symlog", linthresh=1e-14)
+    ax2.set_ylim(bottom=0)
 
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.25)
-        plot_filename1 = os.path.join(plots_dir, f"runtime_plot_{prefix[:-1]}.{output_format}")
-        plt.savefig(plot_filename1, bbox_inches="tight", dpi=300)
-        plt.close(fig1)
-        print(f"First plot saved to {plot_filename1}")
+    ax1.set_title(f"Computation Cost Budget vs Runtime\nand Relative Error ({prefix[:-1]})")
+    ax1.grid(True, linestyle=":", alpha=0.7)
 
-        # Second Plot: Pareto Front of Optimized Programs
-        fig2, ax3 = plt.subplots(figsize=(10, 8))  # Adjust size as needed
+    # Build combined legend for the first plot
+    lines = [line1, line3]
+    labels = [line1.get_label(), line3.get_label()]
+    if original_runtime is not None:
+        lines.append(line2)
+        labels.append(line2.get_label())
+    if original_error is not None:
+        lines.append(line4)
+        labels.append(line4.get_label())
 
-        ax3.set_xlabel("Runtimes (seconds)")
-        ax3.set_ylabel("Relative Errors (%)")
-        ax3.set_title(f"Pareto Front of Optimized Programs ({prefix[:-1]})")
+    ax1.legend(
+        lines,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=2,
+        borderaxespad=0.0,
+        frameon=False,
+    )
 
-        scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.25)
 
-        if original_runtime is not None and original_error is not None:
-            scatter2 = ax3.scatter(
-                original_runtime,
-                original_error,
-                marker="x",
-                color="red",
-                s=100,
-                label="Original Program",
-            )
+    plot_filename1 = os.path.join(plots_dir, f"runtime_plot_{prefix[:-1]}.{output_format}")
+    plt.savefig(plot_filename1, bbox_inches="tight", dpi=300)
+    plt.close(fig1)
+    print(f"First plot saved to {plot_filename1}")
 
-        # Calculate Pareto Front
-        points = np.array(list(zip(runtimes, errors)))
-        sorted_indices = np.argsort(points[:, 0])
-        sorted_points = points[sorted_indices]
+    # -------------------------------------------------------------------------
+    # Second Plot: Pareto Front (Runtimes vs. Relative Errors)
+    # -------------------------------------------------------------------------
+    fig2, ax3 = plt.subplots(figsize=(10, 8))
 
-        pareto_front = [sorted_points[0]]
-        for point in sorted_points[1:]:
-            if point[1] < pareto_front[-1][1]:
-                pareto_front.append(point)
+    blue = "#2287E6"
+    yellow = "#FFBD59"
+    red = "#FF6666"
+    big_star_size = 300
+    small_star_size = 250
+    triangle_size = 200
 
-        pareto_front = np.array(pareto_front)
+    ax3.set_xlabel("Runtimes (seconds)")
+    ax3.set_ylabel("Relative Errors (%)")
+    # ax3.set_title(f"Pareto Front of Optimized Programs ({prefix[:-1]})")
+    ax3.set_yscale("log")
+    ax3.grid(True, linestyle=":", alpha=0.7)
 
-        (line_pareto,) = ax3.step(
-            pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front", where="post"
-        )
-        ax3.set_yscale("log")
-
-        ax3.grid(True)
-
-        pareto_lines = [scatter1, line_pareto]
-        pareto_labels = [scatter1.get_label(), line_pareto.get_label()]
-        if original_runtime is not None and original_error is not None:
-            pareto_lines.append(scatter2)
-            pareto_labels.append(scatter2.get_label())
-
-        ax3.legend(
-            pareto_lines,
-            pareto_labels,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.15),
-            ncol=len(pareto_lines),
-            borderaxespad=0.0,
-            frameon=False,
-        )
-
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.25)
-
-        plot_filename2 = os.path.join(plots_dir, f"pareto_front_plot_{prefix[:-1]}.{output_format}")
-        plt.savefig(plot_filename2, bbox_inches="tight", dpi=300)
-        plt.close(fig2)
-        print(f"Second plot saved to {plot_filename2}")
+    # -------------------------------------------------------------------------
+    # Identify Pareto-optimal points (including the original program if provided)
+    # -------------------------------------------------------------------------
+    # First, build the array of points from optimized programs.
+    optimization_points = np.array(list(zip(runtimes, errors)))
+    # If an original program is provided, add it to the set of points.
+    if original_runtime is not None and original_error is not None:
+        all_points = np.vstack([optimization_points, [original_runtime, original_error]])
     else:
-        # Existing behavior for non-PDF formats
-        plot_filename = os.path.join(plots_dir, f"runtime_error_plot_{prefix[:-1]}.{output_format}")
+        all_points = optimization_points
 
-        fig, (ax1, ax3) = plt.subplots(1, 2, figsize=(20, 8))
+    n_points = len(all_points)
+    pareto_optimal = np.zeros(n_points, dtype=bool)
+    current_best_error = float("inf")
+    indices_by_runtime = np.argsort(all_points[:, 0])
+    for idx in indices_by_runtime:
+        if all_points[idx, 1] < current_best_error:
+            pareto_optimal[idx] = True
+            current_best_error = all_points[idx, 1]
 
-        # First Plot: Computation Cost Budget vs Runtime and Relative Error
-        color_runtime = "tab:blue"
-        ax1.set_xlabel("Computation Cost Budget")
-        ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
-        (line1,) = ax1.step(
-            budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime, where="post"
-        )
-        if original_runtime is not None:
-            line2 = ax1.axhline(y=original_runtime, color=color_runtime, linestyle="--", label="Original Runtime")
-        ax1.tick_params(axis="y", labelcolor=color_runtime)
-
-        ax2 = ax1.twinx()
-        color_error = "tab:green"
-        ax2.set_ylabel("Relative Errors (%)", color=color_error)
-        (line3,) = ax2.step(
-            budgets,
-            errors,
-            marker="s",
-            linestyle="-",
-            label="Optimized Relative Errors",
-            color=color_error,
-            where="post",
-        )
-        if original_error is not None:
-            line4 = ax2.axhline(y=original_error, color=color_error, linestyle="--", label="Original Relative Error")
-        ax2.tick_params(axis="y", labelcolor=color_error)
-        ax2.set_yscale("log")
-
-        ax1.set_title(f"Computation Cost Budget vs Runtime and Relative Error ({prefix[:-1]})")
-        ax1.grid(True)
-
-        lines = [line1, line3]
-        labels = [line.get_label() for line in lines]
-        if original_runtime is not None:
-            lines.append(line2)
-            labels.append(line2.get_label())
-        if original_error is not None:
-            lines.append(line4)
-            labels.append(line4.get_label())
-
-        ax1.legend(
-            lines,
-            labels,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.15),
-            ncol=len(lines),
-            borderaxespad=0.0,
-            frameon=False,
-        )
-
-        # Second Plot: Pareto Front of Optimized Programs
-        ax3.set_xlabel("Runtimes (seconds)")
-        ax3.set_ylabel("Relative Errors (%)")
-        ax3.set_title(f"Pareto Front of Optimized Programs ({prefix[:-1]})")
-
-        scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
-
-        if original_runtime is not None and original_error is not None:
-            scatter2 = ax3.scatter(
-                original_runtime,
-                original_error,
-                marker="x",
-                color="red",
-                s=100,
-                label="Original Program",
-            )
-
-        # Calculate Pareto Front
-        points = np.array(list(zip(runtimes, errors)))
-        sorted_indices = np.argsort(points[:, 0])
-        sorted_points = points[sorted_indices]
-
-        pareto_front = [sorted_points[0]]
-        for point in sorted_points[1:]:
-            if point[1] <= pareto_front[-1][1]:
-                pareto_front.append(point)
-
-        pareto_front = np.array(pareto_front)
-
+    pareto_points = all_points[pareto_optimal]
+    line_pareto = None
+    if len(pareto_points) > 0:
+        sorted_idx = np.argsort(pareto_points[:, 0])
+        pareto_line_points = pareto_points[sorted_idx]
         (line_pareto,) = ax3.step(
-            pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front", where="post"
-        )
-        ax3.set_yscale("log")
-
-        ax3.grid(True)
-
-        pareto_lines = [scatter1, line_pareto]
-        pareto_labels = [scatter1.get_label(), line_pareto.get_label()]
-        if original_runtime is not None and original_error is not None:
-            pareto_lines.append(scatter2)
-            pareto_labels.append(scatter2.get_label())
-
-        ax3.legend(
-            pareto_lines,
-            pareto_labels,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.15),
-            ncol=len(pareto_lines),
-            borderaxespad=0.0,
-            frameon=False,
+            pareto_line_points[:, 0],
+            pareto_line_points[:, 1],
+            linestyle="--",
+            color=blue,
+            label="Pareto Front",
+            where="post",
+            zorder=-1,
         )
 
-        plt.tight_layout()
-        plt.subplots_adjust(bottom=0.25)
+    # -------------------------------------------------------------------------
+    # Markers for special vs. other budgets
+    # -------------------------------------------------------------------------
+    special_budgets = {-30590000, 10450000, -29580000}
+    special_handle = None
+    other_handle = None
+    for b, rt, err in zip(budgets, runtimes, errors):
+        if b in special_budgets:
+            h = ax3.scatter(rt, err, marker="*", s=big_star_size, color=blue, zorder=10)
+            if special_handle is None:
+                special_handle = h
+        else:
+            h = ax3.scatter(rt, err, marker="*", s=small_star_size, color=yellow, zorder=5)
+            if other_handle is None:
+                other_handle = h
 
-        plt.savefig(plot_filename, bbox_inches="tight", dpi=300)
-        plt.close()
-        print(f"Plot saved to {plot_filename}")
+    # Plot the original program as a separate marker (if provided)
+    if original_runtime is not None and original_error is not None:
+        scatter_original = ax3.scatter(
+            original_runtime,
+            original_error,
+            marker="^",
+            color=red,
+            s=triangle_size,
+            label="Original Program",
+            zorder=10,
+        )
+
+    # -------------------------------------------------------------------------
+    # Build legend: Combine the two optimized markers into one entry
+    # -------------------------------------------------------------------------
+    legend_elements = []
+    legend_labels = []
+
+    # Combine special and other handles into a tuple for a single legend entry.
+    if special_handle is not None or other_handle is not None:
+        if special_handle is not None and other_handle is not None:
+            optimized_handle = (special_handle, other_handle)
+        else:
+            optimized_handle = special_handle if special_handle is not None else other_handle
+        legend_elements.append(optimized_handle)
+        legend_labels.append("Optimized")
+
+    if original_runtime is not None and original_error is not None:
+        legend_elements.append(scatter_original)
+        legend_labels.append("Original")
+    if line_pareto is not None:
+        legend_elements.append(line_pareto)
+        legend_labels.append("Pareto Front")
+
+    ax3.legend(
+        legend_elements,
+        legend_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=len(legend_elements),
+        borderaxespad=0.0,
+        frameon=False,
+        handler_map={tuple: HandlerTuple(ndivide=None)},
+    )
+
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.25)
+
+    plot_filename2 = os.path.join(plots_dir, f"pareto_front_plot_{prefix[:-1]}.{output_format}")
+    plt.savefig(plot_filename2, bbox_inches="tight", dpi=300)
+    plt.close(fig2)
+    print(f"Second plot saved to {plot_filename2}")
 
 
 def build_all(tmp_dir, logs_dir, prefix):
@@ -807,7 +772,7 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=1):
     )
 
 
-def plot_from_data(tmp_dir, plots_dir, prefix, output_format="png"):
+def plot_from_data(tmp_dir, plots_dir, prefix, output_format="pdf"):
     data_file = os.path.join(tmp_dir, f"{prefix}benchmark_data.pkl")
     if not os.path.exists(data_file):
         print(f"Data file {data_file} does not exist. Cannot plot.")
@@ -1008,7 +973,7 @@ def main():
     parser.add_argument("--benchmark", action="store_true", help="Run benchmark")
     parser.add_argument("--all", action="store_true", help="Build and run benchmark")
     parser.add_argument("--plot-only", action="store_true", help="Plot results from existing data")
-    parser.add_argument("--output-format", type=str, default="png", help="Output format for plots (e.g., png, pdf)")
+    parser.add_argument("--output-format", type=str, default="pdf", help="Output format for plots (e.g., png, pdf)")
     parser.add_argument("--analytics", action="store_true", help="Run analytics on saved data")
     parser.add_argument("--disable-preopt", action="store_true", help="Disable Enzyme preoptimization")
     parser.add_argument(
