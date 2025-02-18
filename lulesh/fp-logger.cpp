@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <fstream>
@@ -6,9 +7,12 @@
 #include <limits>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "fp-logger.hpp"
+
+constexpr double EPS = 0.0;
 
 class ValueInfo {
 public:
@@ -17,33 +21,123 @@ public:
   std::vector<double> minOperands;
   std::vector<double> maxOperands;
   unsigned executions = 0;
-  double logSum = 0.0;
-  unsigned logCount = 0;
+
+  double runningSumLog = 0.0;
+  unsigned runningCountNonZero = 0;
+  double runningSumArith = 0.0;
+  unsigned validCount = 0;
 
   void update(double res, const double *operands, unsigned numOperands) {
-    minRes = std::min(minRes, res);
-    maxRes = std::max(maxRes, res);
+    ++executions;
+
     if (minOperands.empty()) {
       minOperands.resize(numOperands, std::numeric_limits<double>::max());
       maxOperands.resize(numOperands, std::numeric_limits<double>::lowest());
     }
     for (unsigned i = 0; i < numOperands; ++i) {
-      minOperands[i] = std::min(minOperands[i], operands[i]);
-      maxOperands[i] = std::max(maxOperands[i], operands[i]);
+      if (!std::isnan(operands[i])) {
+        minOperands[i] = std::min(minOperands[i], operands[i]);
+        maxOperands[i] = std::max(maxOperands[i], operands[i]);
+      }
     }
-    ++executions;
 
     if (!std::isnan(res)) {
-      logSum += std::log1p(std::fabs(res));
-      ++logCount;
+      minRes = std::min(minRes, res);
+      maxRes = std::max(maxRes, res);
+
+      double absRes = std::fabs(res);
+      runningSumArith += absRes;
+      ++validCount;
+
+      if (EPS != 0.0) {
+        runningSumLog += std::log(absRes + EPS);
+      } else {
+        if (absRes != 0.0) {
+          runningSumLog += std::log(absRes);
+          ++runningCountNonZero;
+        }
+      }
     }
   }
 
-  double getGeometricAverage() const {
-    if (logCount == 0) {
-      return 0.;
+  double getGeoMean() const {
+    if (validCount == 0)
+      return 0.0;
+
+    if (EPS != 0.0) {
+      return std::exp(runningSumLog / validCount) - EPS;
+    } else {
+      if (runningCountNonZero == 0) {
+        return 0.0;
+      }
+      return std::exp(runningSumLog / runningCountNonZero);
     }
-    return std::expm1(logSum / logCount);
+  }
+
+  double getArithMean() const {
+    if (validCount == 0)
+      return 0.0;
+    return runningSumArith / validCount;
+  }
+
+  double getMaxAbs() const {
+    return std::max(std::abs(minRes), std::abs(maxRes));
+  }
+};
+
+class GradInfo {
+public:
+  double runningSumLog = 0.0;
+  unsigned runningCountNonZero = 0;
+  double runningSumArith = 0.0;
+  unsigned validCount = 0;
+
+  double minGrad = std::numeric_limits<double>::max();
+  double maxGrad = std::numeric_limits<double>::lowest();
+
+  void update(double grad) {
+    if (!std::isnan(grad)) {
+      minGrad = std::min(minGrad, grad);
+      maxGrad = std::max(maxGrad, grad);
+
+      double absGrad = std::fabs(grad);
+
+      runningSumArith += absGrad;
+      ++validCount;
+
+      if (EPS != 0.0) {
+        runningSumLog += std::log(absGrad + EPS);
+      } else {
+        if (absGrad != 0.0) {
+          runningSumLog += std::log(absGrad);
+          ++runningCountNonZero;
+        }
+      }
+    }
+  }
+
+  double getGeoMean() const {
+    if (validCount == 0)
+      return 0.0;
+
+    if (EPS != 0.0) {
+      return std::exp(runningSumLog / validCount) - EPS;
+    } else {
+      if (runningCountNonZero == 0) {
+        return 0.0;
+      }
+      return std::exp(runningSumLog / runningCountNonZero);
+    }
+  }
+
+  double getArithMean() const {
+    if (validCount == 0)
+      return 0.0;
+    return runningSumArith / validCount;
+  }
+
+  double getMaxAbs() const {
+    return std::max(std::abs(minGrad), std::abs(maxGrad));
   }
 };
 
@@ -53,28 +147,10 @@ public:
   double maxErr = std::numeric_limits<double>::lowest();
 
   void update(double err) {
-    minErr = std::min(minErr, err);
-    maxErr = std::max(maxErr, err);
-  }
-};
-
-class GradInfo {
-public:
-  double logSum = 0.0;
-  unsigned count = 0;
-
-  void update(double grad) {
-    if (!std::isnan(grad)) {
-      logSum += std::log1p(std::fabs(grad));
-      ++count;
+    if (!std::isnan(err)) {
+      minErr = std::min(minErr, err);
+      maxErr = std::max(maxErr, err);
     }
-  }
-
-  double getGeometricAverage() const {
-    if (count == 0) {
-      return 0.;
-    }
-    return std::expm1(logSum / count);
   }
 };
 
@@ -112,8 +188,9 @@ public:
       std::cout << "\tMinRes = " << info.minRes << "\n";
       std::cout << "\tMaxRes = " << info.maxRes << "\n";
       std::cout << "\tExecutions = " << info.executions << "\n";
-      std::cout << "\tGeometric Average = " << info.getGeometricAverage()
-                << "\n";
+      std::cout << "\tGeoMeanAbs = " << info.getGeoMean() << "\n";
+      std::cout << "\tArithMeanAbs = " << info.getArithMean() << "\n";
+      std::cout << "\tMaxAbs = " << info.getMaxAbs() << "\n";
       for (unsigned i = 0; i < info.minOperands.size(); ++i) {
         std::cout << "\tOperand[" << i << "] = [" << info.minOperands[i] << ", "
                   << info.maxOperands[i] << "]\n";
@@ -132,7 +209,9 @@ public:
       const auto &id = pair.first;
       const auto &info = pair.second;
       std::cout << "Grad:" << id << "\n";
-      std::cout << "\tGrad = " << info.getGeometricAverage() << "\n";
+      std::cout << "\tGeoMeanAbs = " << info.getGeoMean() << "\n";
+      std::cout << "\tArithMeanAbs = " << info.getArithMean() << "\n";
+      std::cout << "\tMaxAbs = " << info.getMaxAbs() << "\n";
     }
   }
 };
