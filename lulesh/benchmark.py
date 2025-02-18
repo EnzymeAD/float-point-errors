@@ -12,6 +12,8 @@ from statistics import mean
 import multiprocessing
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
+import seaborn as sns
+from matplotlib.legend_handler import HandlerTuple
 from tqdm import tqdm
 import math
 
@@ -111,7 +113,7 @@ def compute_error(reference_output, test_output, iteration):
         print("Reference energy value is zero, cannot compute relative error.")
         return None
 
-    relative_error = (abs(ref_energy - test_energy) / abs(ref_energy)) * 100
+    relative_error = abs(ref_energy - test_energy) / abs(ref_energy)
     return relative_error
 
 
@@ -162,6 +164,7 @@ def plot_results(
     output_format="png",
     plots_dir="plots",
 ):
+    sns.set_theme(style="whitegrid")
     rcParams["font.family"] = "serif"
     rcParams["font.serif"] = ["Linux Libertine"]
     rcParams["font.size"] = 20
@@ -175,12 +178,12 @@ def plot_results(
     runtimes = np.array(runtimes)
     errors = np.array(errors)
 
-    valid_indices = ~np.isnan(runtimes)
+    valid_indices = ~np.isnan(runtimes) & ~np.isnan(errors) & (runtimes <= 15)
     budgets = budgets[valid_indices]
     runtimes = runtimes[valid_indices]
     errors = errors[valid_indices]
 
-    max_error = 100
+    max_error = 1.0
     adjusted_errors = np.copy(errors)
     adjusted_errors[np.isnan(adjusted_errors)] = max_error
     adjusted_errors[adjusted_errors > max_error] = max_error
@@ -189,35 +192,47 @@ def plot_results(
 
     fig1, ax1 = plt.subplots(figsize=(10, 8))
 
-    color_runtime = "tab:blue"
+    color_runtime = "C0"
+    color_error = "C1"
+
     ax1.set_xlabel("Computation Cost Budget")
     ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
-    scatter1 = ax1.scatter(budgets, runtimes, marker="o", label="Optimized Runtimes", color=color_runtime, s=5)
+    (line1,) = ax1.step(
+        budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime, where="post"
+    )
+    if original_runtime is not None:
+        line2 = ax1.axhline(y=original_runtime, color=color_runtime, linestyle="--", label="Original Runtime")
     ax1.tick_params(axis="y", labelcolor=color_runtime)
-    ax1.axhline(y=original_runtime, color="blue", linestyle="--", label="Original Runtime")
 
     ax2 = ax1.twinx()
-    color_error = "tab:green"
-    ax2.set_ylabel("Relative Errors (%)", color=color_error)
-    scatter2 = ax2.scatter(
-        budgets, adjusted_errors, marker="s", label="Optimized Relative Errors", color=color_error, s=5
+    ax2.set_ylabel("Relative Errors", color=color_error)
+    (line3,) = ax2.step(
+        budgets,
+        adjusted_errors,
+        marker="s",
+        linestyle="-.",
+        label="Optimized Relative Errors",
+        color=color_error,
+        where="post",
     )
+    if original_error is not None:
+        line4 = ax2.axhline(y=original_error, color=color_error, linestyle="--", label="Original Relative Error")
     ax2.tick_params(axis="y", labelcolor=color_error)
-    ax2.axhline(y=original_error, color="green", linestyle="--", label="Original Relative Error")
-    ax2.axhline(y=0, color="gold", linestyle="-", label="Zero Relative Error")
     ax2.set_yscale("symlog", linthresh=1e-14)
-    ax2.set_ylim(bottom=-1e-14)
+    ax2.set_ylim(bottom=0)
 
-    ax1.grid(True)
+    ax1.set_title(f"Computation Cost Budget vs Runtime\nand Relative Error ({prefix})")
+    ax1.grid(True, linestyle=":", alpha=0.7)
 
-    lines = [scatter1, scatter2]
-    labels = [line.get_label() for line in lines]
-    lines.append(plt.Line2D([0], [0], color="blue", linestyle="--"))
-    labels.append("Original Runtime")
-    lines.append(plt.Line2D([0], [0], color="green", linestyle="--"))
-    labels.append("Original Relative Error")
-    lines.append(plt.Line2D([0], [0], color="gold", linestyle="-"))
-
+    # Build a combined legend for the first plot
+    lines = [line1, line3]
+    labels = [line1.get_label(), line3.get_label()]
+    if original_runtime is not None:
+        lines.append(line2)
+        labels.append("Original Runtime")
+    if original_error is not None:
+        lines.append(line4)
+        labels.append("Original Relative Error")
     ax1.legend(
         lines,
         labels,
@@ -232,63 +247,171 @@ def plot_results(
     plt.subplots_adjust(bottom=0.25)
 
     os.makedirs(plots_dir, exist_ok=True)
-
     plot_filename1 = os.path.join(plots_dir, f"lulesh_runtime_error.{output_format}")
     plt.savefig(plot_filename1, bbox_inches="tight", dpi=300)
     plt.close(fig1)
     print(f"First plot saved to {plot_filename1}")
 
-    fig2, ax3 = plt.subplots(figsize=(10, 8))
+    # -------------------------------------------------------------------------
+    # Second Plot: Pareto Front (Runtimes vs. Relative Errors) with broken y-axis
+    # We remove the region from 1e-11 to 1e0 by using two subplots.
+    # -------------------------------------------------------------------------
+    # Create two subplots that share the x-axis
+    fig2, (ax_upper, ax_lower) = plt.subplots(
+        2, 1, sharex=True, figsize=(10, 8), gridspec_kw={"height_ratios": [0.2, 0.8]}
+    )
 
-    ax3.set_xlabel("Runtimes (seconds)")
-    ax3.set_ylabel("Relative Errors (%)")
-    scatter1 = ax3.scatter(runtimes, adjusted_errors, label="Optimized Programs", color="blue", s=1)
+    # Use a symlog scale on both axes
+    for ax in (ax_upper, ax_lower):
+        ax.set_yscale("symlog", linthresh=1e-14, linscale=0.5)
 
+    # TODO: Fix
+    ax_upper.set_ylim(1e-1, 500)
+    ax_lower.set_ylim(-1e-15, 1e-11)
+
+    # Remove the spines between the two plots
+    ax_upper.spines["bottom"].set_visible(False)
+    ax_lower.spines["top"].set_visible(False)
+    ax_upper.tick_params(labelbottom=False)  # hide x tick labels on the upper plot
+
+    # Set common labels
+
+    # Define colors and marker sizes
+    blue = "#2287E6"
+    yellow = "#FFBD59"
+    red = "#FF6666"
+    big_star_size = 100
+    small_star_size = 10
+    triangle_size = 100
+
+    # Identify Pareto-optimal points (including the original program if provided)
+    optimization_points = np.array(list(zip(runtimes, adjusted_errors, budgets)))
     if original_runtime is not None and original_error is not None:
-        scatter2 = ax3.scatter(
-            original_runtime,
-            original_error,
-            marker="x",
-            color="red",
-            s=50,
-            label="Original Program",
+        all_points = np.vstack([optimization_points, [original_runtime, original_error, 0]])
+    else:
+        all_points = optimization_points
+
+    n_points = len(all_points)
+    pareto_optimal = np.zeros(n_points, dtype=bool)
+    current_best_error = float("inf")
+    indices_by_runtime = np.argsort(all_points[:, 0])
+    for idx in indices_by_runtime:
+        if all_points[idx, 1] < current_best_error:
+            pareto_optimal[idx] = True
+            current_best_error = all_points[idx, 1]
+
+    pareto_points = all_points[pareto_optimal]
+    non_pareto_points = all_points[~pareto_optimal]
+
+    print("\n=== Pareto Optimal Points ===")
+    for rt, err, b in pareto_points:
+        print(f"Budget: {b}, Runtime: {rt:.6f} seconds, Relative Error: {err:.6e}")
+
+    # Draw the Pareto front as a step plot.
+    # We plot on each axis so that only the portion in its y-range is visible.
+    line_pareto = None
+    if len(pareto_points) > 0:
+        sorted_idx = np.argsort(pareto_points[:, 0])
+        pareto_line_points = pareto_points[sorted_idx]
+        # Plot on the upper panel (with label)
+        line_pareto = ax_upper.step(
+            pareto_line_points[:, 0],
+            pareto_line_points[:, 1],
+            linestyle="--",
+            color=blue,
+            label="Pareto Front",
+            where="post",
+            zorder=-1,
+        )[0]
+        # Plot on the lower panel without a label
+        ax_lower.step(
+            pareto_line_points[:, 0],
+            pareto_line_points[:, 1],
+            linestyle="--",
+            color=blue,
+            where="post",
+            zorder=-1,
         )
 
-    points = np.array(list(zip(runtimes, adjusted_errors)))
-    sorted_indices = np.argsort(points[:, 0])
-    sorted_points = points[sorted_indices]
+    # Mark optimized points.
+    # For points that belong to a "special" budget (i.e. those on the Pareto front),
+    # we use a larger marker.
+    special_budgets = {b for _, _, b in pareto_points}
+    special_handle = None
+    other_handle = None
+    for b, rt, err in zip(budgets, runtimes, adjusted_errors):
+        if b in special_budgets:
+            # Plot on upper panel (add label only the first time)
+            if special_handle is None:
+                h = ax_upper.scatter(rt, err, marker="*", s=big_star_size, color=blue, zorder=10, label="Optimized")
+                special_handle = h
+            else:
+                ax_upper.scatter(rt, err, marker="*", s=big_star_size, color=blue, zorder=10)
+            # Plot on lower panel (no label)
+            ax_lower.scatter(rt, err, marker="*", s=big_star_size, color=blue, zorder=10)
+        else:
+            if other_handle is None:
+                h = ax_upper.scatter(rt, err, marker="*", s=small_star_size, color=yellow, zorder=5, label="Optimized")
+                other_handle = h
+            else:
+                ax_upper.scatter(rt, err, marker="*", s=small_star_size, color=yellow, zorder=5)
+            ax_lower.scatter(rt, err, marker="*", s=small_star_size, color=yellow, zorder=5)
 
-    pareto_front = [sorted_points[0]]
-    for point in sorted_points[1:]:
-        if point[1] < pareto_front[-1][1]:
-            pareto_front.append(point)
-
-    pareto_front = np.array(pareto_front)
-
-    (line_pareto,) = ax3.plot(
-        pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front", linewidth=1
-    )
-    ax3.set_yscale("symlog", linthresh=1e-14)
-    ax3.set_ylim(bottom=-1e-14)
-
-    ax3.grid(True)
-
-    pareto_lines = [scatter1, line_pareto]
-    pareto_labels = [scatter1.get_label(), line_pareto.get_label()]
+    # Plot the original program with a distinct marker (if provided)
     if original_runtime is not None and original_error is not None:
-        pareto_lines.append(scatter2)
-        pareto_labels.append(scatter2.get_label())
+        scatter_original = ax_upper.scatter(
+            original_runtime,
+            original_error,
+            marker="^",
+            color=red,
+            s=triangle_size,
+            label="Original Program",
+            zorder=10,
+        )
+        ax_lower.scatter(
+            original_runtime,
+            original_error,
+            marker="^",
+            color=red,
+            s=triangle_size,
+            zorder=10,
+        )
 
+    optimized_handle = special_handle if special_handle is not None else other_handle
+    legend_elements = []
+    legend_labels = []
+    if optimized_handle is not None:
+        legend_elements.append(optimized_handle)
+        legend_labels.append("Optimized")
+    if original_runtime is not None and original_error is not None:
+        legend_elements.append(scatter_original)
+        legend_labels.append("Original")
+    if line_pareto is not None:
+        legend_elements.append(line_pareto)
+        legend_labels.append("Pareto Front")
 
-    ax3.legend(
-        pareto_lines,
-        pareto_labels,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.15),
-        ncol=2,
-        borderaxespad=0.0,
+    fig2.legend(
+        legend_elements,
+        legend_labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.1),
+        ncol=len(legend_elements),
+        # borderaxespad=0.0,
         frameon=False,
     )
+
+    ax_lower.set_xlabel("Runtimes (seconds)")
+    fig2.text(0.0, 0.6, "Relative Errors", va="center", ha="center", rotation="vertical", fontsize=20)
+
+    # Add break markers (diagonal lines) to indicate the break in the y-axis.
+    # d = 0.015  # size of diagonal lines in axes coordinates
+    # kwargs = dict(color="k", clip_on=False, lw=1)
+    # On the upper axes, draw at the bottom
+    # ax_upper.plot((-d, +d), (-d, +d), transform=ax_upper.transAxes, **kwargs)
+    # ax_upper.plot((1 - d, 1 + d), (-d, +d), transform=ax_upper.transAxes, **kwargs)
+    # # On the lower axes, draw at the top
+    # ax_lower.plot((-d, +d), (1 - d, 1 + d), transform=ax_lower.transAxes, **kwargs)
+    # ax_lower.plot((1 - d, 1 + d), (1 - d, 1 + d), transform=ax_lower.transAxes, **kwargs)
 
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.25)
@@ -297,14 +420,6 @@ def plot_results(
     plt.savefig(plot_filename2, bbox_inches="tight", dpi=300)
     plt.close(fig2)
     print(f"Second plot saved to {plot_filename2}")
-
-
-def compute_geometric_average(differences):
-    valid_diffs = [1 + d for d in differences if d >= 0]
-    if not valid_diffs:
-        return np.nan
-    log_diffs = [np.log1p(d) for d in valid_diffs]
-    return np.expm1(np.mean(log_diffs))
 
 
 def analyze_data(data, thresholds=None):
@@ -337,48 +452,11 @@ def analyze_data(data, thresholds=None):
             1,
         ]
 
-    if original_error == 0:
-        original_digits = 16
-    elif original_error is not None:
-        original_digits = min(-math.log10(original_error / 100), 16)
-    else:
-        original_digits = None
-
-    print(f"\nOriginal program has {original_digits:.2f} decimal digits of accuracy.")
-
-    digits_list = []
-    for err in errors:
-        if err == 0:
-            digits = 16
-        elif err is not None:
-            digits = min(-math.log10(err / 100), 16)
-        else:
-            digits = None
-        digits_list.append(digits)
-
-    accuracy_improvements = []
-    for digits in digits_list:
-        if digits is not None and original_digits is not None:
-            improvement = digits - original_digits
-            accuracy_improvements.append(improvement)
-        else:
-            accuracy_improvements.append(None)
-
-    max_improvement = None
-    for improvement in accuracy_improvements:
-        if improvement is not None and improvement > 0:
-            if max_improvement is None or improvement > max_improvement:
-                max_improvement = improvement
-    if max_improvement is None:
-        max_improvement = 0.0
-
-    print(f"Maximum accuracy improvement: {max_improvement:.2f} decimal digits")
-
     min_runtime_ratios = {}
     for threshold in thresholds:
         min_ratio = None
         for err, runtime in zip(errors, runtimes):
-            if err is not None and runtime is not None and err <= threshold * 100:
+            if err is not None and runtime is not None and err <= threshold:
                 if original_runtime == 0:
                     continue
                 runtime_ratio = runtime / original_runtime
@@ -418,7 +496,7 @@ def accuracy_task(executable, reference_output="lulesh_gold.txt"):
     collect_output(executable, output_file)
     error = compute_error(reference_output, output_file, iteration=ITER)
     if error is not None:
-        print(f"Relative error for budget {budget}: {error}%")
+        print(f"Relative error for budget {budget}: {error}")
     else:
         print(f"Relative error for budget {budget} could not be computed.")
 
@@ -503,12 +581,12 @@ def main():
         print(f"Reference output file '{reference_output}' does not exist.")
         sys.exit(1)
 
-    if not os.path.exists(original_output_file):
-        collect_output(original_executable, original_output_file)
+    collect_output(original_executable, original_output_file)
 
     original_error = compute_error(reference_output, original_output_file, iteration=ITER)
+    os.remove(original_output_file)
     if original_error is not None:
-        print(f"Relative error for the original binary: {original_error}%")
+        print(f"Relative error for the original binary: {original_error}")
     else:
         print("Relative error for the original binary could not be computed.")
 
@@ -516,7 +594,7 @@ def main():
 
     print("Starting accuracy measurements...")
     errors = {}
-    cpu_count = min(160, multiprocessing.cpu_count())
+    cpu_count = min(64, multiprocessing.cpu_count())
     with multiprocessing.Pool(processes=cpu_count) as pool:
         results = pool.map(accuracy_task, executable_paths)
         for result in results:
