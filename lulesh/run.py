@@ -126,8 +126,8 @@ def main():
     os.makedirs("tmp", exist_ok=True)
 
     env = os.environ.copy()
-    env["ENZYME_PATH"] = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
-    env["CLANG_PATH"] = os.path.join(HOME, "llvms/llvm15/build/bin")
+    env["ENZYME_PATH"] = os.path.join(HOME, "sync/Enzyme/build-release/Enzyme/ClangEnzyme-16.so")
+    env["CLANG_PATH"] = os.path.join(HOME, "llvms/llvm16/build-release/bin")
 
     env["OPENMP_PATH"] = os.path.join(env["CLANG_PATH"], "../projects/openmp/runtime/src")
     env["MPI_PATH"] = "/usr/lib/x86_64-linux-gnu/openmpi/lib"
@@ -150,8 +150,6 @@ def main():
         "-L" + env["MPI_PATH"],
         "-mllvm",
         "-enzyme-loose-types",
-        "-mllvm",
-        "-enzyme-inline",
         "-fplugin=" + env["ENZYME_PATH"],
         "-lmpi",
         "-ffast-math",
@@ -188,20 +186,22 @@ def main():
         "-mllvm",
         "-fpopt-cache-path=cache",
         "-mllvm",
-        "-fpopt-cost-model-path=cm.csv",
+        "-fpopt-cost-model-path=../microbm/cm.csv",
+        "-mllvm",
+        "-fpopt-strict-mode",
     ]
 
-    run_command(["make", "clean"], "Cleaning previous builds", log_file=os.path.join("logs", "make_clean.log"))
+    # run_command(["make", "clean"], "Cleaning previous builds", log_file=os.path.join("logs", "make_clean.log"))
 
     shared_objs = compile_shared_objects(env)
 
-    BUDGET_PATH = "budgets.txt"
+    BUDGET_PATH = "cache/budgets.txt"
     budgets = load_budgets(BUDGET_PATH)
     random.shuffle(budgets)
     print("Shuffled budgets:", budgets)
     print(f"Testing {len(budgets)} budgets from {BUDGET_PATH}")
 
-    max_workers = 160
+    max_workers = 128
     executables = []
     failed_budgets = []
 
