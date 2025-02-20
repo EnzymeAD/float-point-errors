@@ -12,6 +12,8 @@ HOME = "/home/sbrantq"
 
 np.random.seed(42)
 
+NUM_PARALLEL = 64
+
 
 def run_command(command, description, log_file, env=None):
     try:
@@ -59,8 +61,6 @@ def compile_binary(budget, env, tmp_dir):
         + fpopt_flags
         + ["-o", obj_file]
     )
-    # print("command: ", " ".join(cmd_compile_fpopt))
-
     log_file_compile = os.path.join("logs", f"compile_budget_{budget}.log")
     compile_output = run_command(
         cmd_compile_fpopt,
@@ -120,6 +120,7 @@ def load_budgets(file_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Compile LULESH optimized binaries with FPOpt")
+    parser.add_argument("--relink", action="store_true", help="Relink existing object files with shared objects to produce executables.")
     args = parser.parse_args()
 
     os.makedirs("logs", exist_ok=True)
@@ -160,10 +161,6 @@ def main():
         "-mllvm",
         "-enzyme-enable-fpopt",
         "-mllvm",
-        # "-enzyme-print-fpopt",
-        # "-mllvm",
-        # "-enzyme-print-herbie",
-        # "-mllvm",
         "-fpopt-log-path=lulesh.txt",
         "-mllvm",
         "-fpopt-enable-solver",
@@ -191,49 +188,91 @@ def main():
         "-fpopt-strict-mode",
     ]
 
-    # run_command(["make", "clean"], "Cleaning previous builds", log_file=os.path.join("logs", "make_clean.log"))
-
-    shared_objs = compile_shared_objects(env)
-
     BUDGET_PATH = "cache/budgets.txt"
     budgets = load_budgets(BUDGET_PATH)
-    random.shuffle(budgets)
-    print("Shuffled budgets:", budgets)
-    print(f"Testing {len(budgets)} budgets from {BUDGET_PATH}")
+    if not budgets:
+        print("No budgets to process. Exiting.")
+        return
 
-    max_workers = 128
-    executables = []
-    failed_budgets = []
+    # Compile shared objects regardless of mode (they are needed for linking)
+    shared_objs = compile_shared_objects(env)
 
-    print("=== Phase: Compiling and Linking Binaries ===")
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_budget = {
-            executor.submit(compile_and_link, budget, env, "tmp", shared_objs): budget for budget in budgets
-        }
+    if args.relink:
+        print("=== Relink Mode: Linking existing object files with shared objects ===")
+        max_workers = NUM_PARALLEL
+        executables = []
+        failed_budgets = []
 
-        with tqdm(total=len(budgets), desc="Compiling and Linking Binaries") as pbar:
-            for future in as_completed(future_to_budget):
-                budget = future_to_budget[future]
-                try:
-                    executable = future.result()
-                    if executable:
-                        executables.append((budget, executable))
-                        print(f"Successfully compiled and linked executable for budget {budget}: {executable}")
-                    else:
-                        failed_budgets.append(budget)
-                except Exception as e:
-                    print(f"An error occurred for budget {budget}: {e}")
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            future_to_budget = {}
+            for budget in budgets:
+                obj_file = os.path.join("tmp", f"lulesh-fpopt-{budget}.o")
+                if not os.path.isfile(obj_file):
+                    print(f"Object file {obj_file} not found. Skipping budget {budget}.")
                     failed_budgets.append(budget)
-                finally:
-                    pbar.update(1)
+                    continue
+                future = executor.submit(link_binary, budget, obj_file, shared_objs, env, "tmp")
+                future_to_budget[future] = budget
 
-    print(f"Build phase completed. {len(executables)} succeeded, {len(failed_budgets)} failed.")
+            with tqdm(total=len(future_to_budget), desc="Linking Binaries") as pbar:
+                for future in as_completed(future_to_budget):
+                    budget = future_to_budget[future]
+                    try:
+                        executable = future.result()
+                        if executable:
+                            executables.append((budget, executable))
+                            print(f"Successfully linked executable for budget {budget}: {executable}")
+                        else:
+                            failed_budgets.append(budget)
+                    except Exception as e:
+                        print(f"An error occurred for budget {budget}: {e}")
+                        failed_budgets.append(budget)
+                    finally:
+                        pbar.update(1)
 
-    print("All binaries compiled and linked. Executables are saved in the 'tmp' folder.")
-    if failed_budgets:
-        print("Some budgets failed during compilation or linking:")
-        for b in failed_budgets:
-            print(f"  - Budget {b}")
+        print(f"Relinking phase completed. {len(executables)} succeeded, {len(failed_budgets)} failed.")
+        if failed_budgets:
+            print("Some budgets failed during relinking:")
+            for b in failed_budgets:
+                print(f"  - Budget {b}")
+    else:
+        print("=== Full Build Mode: Compiling and Linking Binaries ===")
+        random.shuffle(budgets)
+        print("Shuffled budgets:", budgets)
+        print(f"Testing {len(budgets)} budgets from {BUDGET_PATH}")
+
+        max_workers = NUM_PARALLEL
+        executables = []
+        failed_budgets = []
+
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            future_to_budget = {
+                executor.submit(compile_and_link, budget, env, "tmp", shared_objs): budget for budget in budgets
+            }
+
+            with tqdm(total=len(budgets), desc="Compiling and Linking Binaries") as pbar:
+                for future in as_completed(future_to_budget):
+                    budget = future_to_budget[future]
+                    try:
+                        executable = future.result()
+                        if executable:
+                            executables.append((budget, executable))
+                            print(f"Successfully compiled and linked executable for budget {budget}: {executable}")
+                        else:
+                            failed_budgets.append(budget)
+                    except Exception as e:
+                        print(f"An error occurred for budget {budget}: {e}")
+                        failed_budgets.append(budget)
+                    finally:
+                        pbar.update(1)
+
+        print(f"Build phase completed. {len(executables)} succeeded, {len(failed_budgets)} failed.")
+        if failed_budgets:
+            print("Some budgets failed during compilation or linking:")
+            for b in failed_budgets:
+                print(f"  - Budget {b}")
+
+    print("Process completed.")
 
 
 if __name__ == "__main__":
